@@ -50,7 +50,8 @@ const savePhotos = () => { try { localStorage.setItem(PKEY, JSON.stringify(PHOTO
 const BAD_IMG = /\.(svg|gif|tif)$|map|carte|distribution|range|aire|egg|oeuf|œuf|skull|sound|spectro|naumann|gould|audubon|dresser|illustration|drawing|painting|plate|planche|lithograph|museum|specimen|mhnt|stamp/i;
 async function wikiBatch(lang, titles) {
   const u = `https://${lang}.wikipedia.org/w/api.php?action=query&format=json&formatversion=2&origin=*&redirects=1&prop=pageimages&piprop=thumbnail|name&pithumbsize=720&titles=` + encodeURIComponent(titles.join('|'));
-  const r = await fetch(u); if (!r.ok) throw new Error(r.status);
+  const ac = new AbortController(); const to = setTimeout(() => ac.abort(), 8000);
+  const r = await fetch(u, { signal: ac.signal }).finally(() => clearTimeout(to)); if (!r.ok) throw new Error(r.status);
   const j = await r.json(); const out = {};
   const back = {}; (j.query.normalized || []).forEach(n => back[n.to] = n.from);
   const red = {}; (j.query.redirects || []).forEach(n => red[n.to] = n.from);
@@ -68,10 +69,11 @@ async function ensurePhotos(list) {
   photoLoading = (async () => {
     for (let i = 0; i < need.length; i += 45) {
       const chunk = need.slice(i, i + 45);
-      let fr = {}, en = {};
-      try { fr = await wikiBatch('fr', chunk.map(s => s.n)); } catch (e) { }
+      let fr = {}, en = {}, okFr = false;
+      try { fr = await wikiBatch('fr', chunk.map(s => s.n)); okFr = true; } catch (e) { }
       const sci = chunk.filter(s => s.sci);
       try { if (sci.length) en = await wikiBatch('en', sci.map(s => s.sci)); } catch (e) { }
+      if (!okFr) continue;
       chunk.forEach(s => {
         const arr = [];
         if (fr[s.n]) arr.push(fr[s.n]);
@@ -359,7 +361,7 @@ async function fiche(sp, back) {
   ${f.d ? `<div class="block fam"><h4>Famille ${famLabel(f.n)}</h4><p>${esc(f.d)}</p>${f.sp ? `<p class="muted small">${esc(f.sp)}</p>` : ''}${f.ref ? `<p class="small">Espèce de référence : <b>${esc(f.ref)}</b></p>` : ''}</div>` : ''}`;
   app().querySelector('.back').onclick = back || carnet;
   window.scrollTo(0, 0);
-  await ensurePhotos([sp]);
+  await waitPhotos([sp]);
   showPhoto($('#fph'), photosOf(sp)[0], sp);
 }
 function path(sp) {
@@ -388,13 +390,14 @@ async function startMode(k) {
   if (m.special === 'path') return pathGame();
   runQuiz({ title: m.title, types: m.types, n: m.n, photos: m.photos, mode: k });
 }
+const waitPhotos = list => Promise.race([ensurePhotos(list).catch(() => { }), new Promise(r => setTimeout(r, 9000))]);
 async function loadingScreen(msg) {
   app().innerHTML = `<div class="center"><div class="spinner"></div><p class="muted">${esc(msg)}</p></div>`;
 }
 async function runQuiz(cfg) {
-  if (cfg.photos) { await loadingScreen('Je cherche les photos…'); await ensurePhotos(poolFor(cfg.filter)); }
+  if (cfg.photos) { await loadingScreen('Je cherche les photos…'); await waitPhotos(poolFor(cfg.filter)); }
   const qs = buildSession(cfg).filter(Boolean);
-  if (!qs.length) { toast('Pas assez de matière pour ce jeu'); return home(); }
+  if (!qs.length) { toast(cfg.photos ? 'Photos indisponibles : vérifie la connexion' : 'Pas assez de matière pour ce jeu'); return home(); }
   let i = 0, score = 0, combo = 0, xpGain = 0; const missed = [];
   const next = () => {
     if (i >= qs.length) return endQuiz(cfg, score, qs.length, xpGain, missed);
@@ -448,7 +451,7 @@ function feedback(q, ok, onNext, timed) {
     ${body}
     <button class="btn primary wide" id="nx">Continuer</button></div>`;
   if (q.kind === 'photo' && q.img) { const w = $('#qph'); fillCredit(w, q.img, sp); }
-  if ($('#fbph')) ensurePhotos([sp]).then(() => showPhoto($('#fbph'), photosOf(sp)[0], sp));
+  if ($('#fbph')) waitPhotos([sp]).then(() => showPhoto($('#fbph'), photosOf(sp)[0], sp));
   $('#nx').onclick = onNext;
   setTimeout(() => fb.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 50);
 }
@@ -475,7 +478,7 @@ function endQuiz(cfg, score, total, xp, missed) {
 
 /* ====== Contre-la-montre ====== */
 async function blitz() {
-  await loadingScreen('Je cherche les photos…'); await ensurePhotos(SPECIES());
+  await loadingScreen('Je cherche les photos…'); await waitPhotos(SPECIES());
   const types = ['photo', 'fam', 'sci', 'crit', 'grp'];
   let end = Date.now() + 60000, score = 0, combo = 0, xp = 0, total = 0, timer;
   const next = () => {
@@ -537,7 +540,7 @@ function pairs() {
 
 /* ====== Le chemin : 4 étages sur une photo ====== */
 async function pathGame() {
-  await loadingScreen('Je cherche les photos…'); await ensurePhotos(SPECIES());
+  await loadingScreen('Je cherche les photos…'); await waitPhotos(SPECIES());
   const withPh = SPECIES().filter(s => photosOf(s).length);
   if (!withPh.length) { toast('Photos indisponibles hors ligne'); return home(); }
   let round = 0, pts = 0; const ROUNDS = 5;

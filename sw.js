@@ -1,4 +1,4 @@
-const V='ornitho-v1';
+const V='ornitho-v2';
 const SHELL=['./','index.html','app.js','data.json','manifest.webmanifest','icon-192.png','icon.svg'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(V).then(c=>c.addAll(SHELL)));self.skipWaiting();});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(k=>Promise.all(k.filter(x=>x!==V&&x!=='ornitho-img').map(x=>caches.delete(x)))));self.clients.claim();});
