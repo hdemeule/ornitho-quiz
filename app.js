@@ -240,6 +240,21 @@ const MODES = {
   path: { title: 'Le chemin', icon: '🪜', desc: 'Une photo, quatre étages de classification', special: 'path' }
 };
 
+const ICONS = (() => {
+  const w = d => `<svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square">${d}</svg>`;
+  const r = 'stroke="#e8401c"';
+  return {
+    photo: w(`<rect x="3" y="8" width="26" height="19"/><path d="M11 8l2-4h6l2 4"/><circle cx="16" cy="17" r="5" ${r}/>`),
+    crit: w(`<circle cx="13" cy="13" r="8"/><path d="M19 19l9 9" ${r}/>`),
+    chant: w(`<path d="M4 16h3M10 10v12M15 6v20M20 11v10M25 14v4" /><path d="M28 16h1" ${r}/>`),
+    tree: w(`<path d="M16 4v8M16 12L7 20M16 12l9 8M7 20v8M25 20v8M16 12v16"/><rect x="13" y="2" width="6" height="4" ${r}/>`),
+    intrus: w(`<circle cx="8" cy="10" r="3"/><circle cx="24" cy="10" r="3"/><circle cx="8" cy="23" r="3"/><path d="M20 19l8 8M28 19l-8 8" ${r}/>`),
+    sci: w(`<path d="M9 26L15 6h2l6 20M11 19h10"/><path d="M5 28h22" ${r}/>`),
+    blitz: w(`<circle cx="16" cy="18" r="11"/><path d="M16 11v7l4 3" ${r}/><path d="M13 3h6"/>`),
+    pairs: w(`<rect x="3" y="5" width="11" height="15"/><rect x="18" y="12" width="11" height="15" ${r}/>`),
+    path: w(`<path d="M6 28V20h7v-6h7V8h7"/><path d="M27 4v6" ${r}/>`)
+  };
+})();
 /* ====== Récompenses ====== */
 function addXP(n) {
   const before = rank().lvl; S.xp += n; const after = rank().lvl;
@@ -251,7 +266,7 @@ function addXP(n) {
     S.lastDay = t;
   }
   save();
-  if (after > before) setTimeout(() => toast(`${rank().icon} Nouveau rang : ${rank().name} !`, true), 400);
+  if (after > before) setTimeout(() => toast(`Nouveau rang : ${rank().name}`, true), 400);
 }
 function toast(msg, big) {
   const el = document.createElement('div'); el.className = 'toast' + (big ? ' big' : ''); el.textContent = msg;
@@ -285,20 +300,21 @@ function home() {
   const dueN = Object.values(S.cards).filter(c => c.due <= t).length;
   const groups = chapters();
   app().innerHTML = `
+  <div class="topbar"><div class="wordmark"><img src="icon-192.png" alt="">Ornitho<em>Quiz</em></div><div class="streak" title="Jours d'affilée">${S.streak || 0} J</div></div>
   <header class="hero">
-    <div class="rank"><span class="ricon">${r.icon}</span><div><div class="rname">${esc(r.name)}</div><div class="rsub">Niveau ${r.lvl} · ${S.xp.toLocaleString('fr-BE')} XP</div></div>
-    <div class="streak" title="Jours d'affilée">🔥 ${S.streak || 0}</div></div>
+    <div class="rsub">Niveau ${r.lvl} · ${S.xp.toLocaleString('fr-BE')} XP</div>
+    <div class="rank"><span class="rname">${esc(r.name)}</span></div>
     <div class="bar"><i style="width:${pct}%"></i></div>
     <div class="rnext">${r.to ? `${(r.to - S.xp).toLocaleString('fr-BE')} XP avant « ${esc(r.next)} »` : 'Rang maximum'}</div>
   </header>
   <section class="goal">
     <div class="ring" style="--p:${goalPct}"><span>${done}/${S.goal}</span></div>
     <div><b>Objectif du jour</b><br><span class="muted">${dueN} révision${dueN > 1 ? 's' : ''} en attente</span></div>
-    <button class="btn primary" data-mode="daily">Jouer ▸</button>
+    <button class="btn primary" data-mode="daily">Jouer</button>
   </section>
   <h2>Jeux</h2>
   <div class="grid">${Object.entries(MODES).filter(([k]) => k !== 'daily').map(([k, m]) => `
-    <button class="tile" data-mode="${k}"><span class="ti">${m.icon}</span><b>${m.title}</b><small>${m.desc}</small>${S.best[k] ? `<em>Record ${S.best[k]}</em>` : ''}</button>`).join('')}
+    <button class="tile" data-mode="${k}"><span class="ti">${ICONS[k] || ""}</span><b>${m.title}</b><small>${m.desc}</small>${S.best[k] ? `<em>Record ${S.best[k]}</em>` : ''}</button>`).join('')}
   </div>
   <h2>Chapitres du MOOC</h2>
   <p class="muted small">Chaque chapitre a trois niveaux : ★ familles, ★★ espèces sur photo, ★★★ critères fins et chants. 80 % pour décrocher l'étoile.</p>
@@ -465,7 +481,7 @@ function endQuiz(cfg, score, total, xp, missed) {
   save();
   const uniq = [...new Map(missed.map(s => [s.n, s])).values()];
   app().innerHTML = `<div class="end">
-    <div class="big">${pct >= 90 ? '🏆' : pct >= 70 ? '🎉' : pct >= 50 ? '👍' : '🌱'}</div>
+    <div class="big">${pct >= 90 ? 'Excellent' : pct >= 70 ? 'Très bien' : pct >= 50 ? 'Correct' : 'À revoir'}</div>
     <h1>${score} / ${total}</h1>
     <p class="muted">${esc(cfg.title)} · +${xp} XP</p>
     ${star}
@@ -498,7 +514,7 @@ async function blitz() {
     if (finished) return; finished = true; clearInterval(timer); addXP(xp);
     const best = parseInt(S.best.blitz || 0); const rec = score > best; if (rec) S.best.blitz = score;
     checkBadges({ endSession: true }); save();
-    app().innerHTML = `<div class="end"><div class="big">⚡</div><h1>${score} points</h1><p class="muted">${total} questions · +${xp} XP</p>${rec ? '<p class="newstar">Nouveau record !</p>' : `<p class="muted">Record : ${best}</p>`}
+    app().innerHTML = `<div class="end"><div class="big">Contre-la-montre</div><h1>${score} points</h1><p class="muted">${total} questions · +${xp} XP</p>${rec ? '<p class="newstar">Nouveau record !</p>' : `<p class="muted">Record : ${best}</p>`}
     <p class="small muted">Combo : chaque bonne réponse vaut 1 à 5 points selon la série. Une erreur coûte 3 secondes.</p>
     <div class="row2"><button class="btn" id="home">Accueil</button><button class="btn primary" id="again">Rejouer</button></div></div>`;
     $('#home').onclick = home; $('#again').onclick = blitz;
@@ -514,7 +530,7 @@ function pairs() {
   for (const s of shuffle(pool)) { const k = variant === 'fam' ? s.f : s.sci; if (!usedF.has(k)) { usedF.add(k); chosen.push(s); } if (chosen.length === 6) break; }
   const cards = shuffle(chosen.flatMap((s, i) => [{ i, t: s.n, kind: 'sp' }, { i, t: variant === 'fam' ? famLabel(s.f) : s.sci, kind: variant }]));
   let sel = null, found = 0, errors = 0; const t0 = Date.now();
-  app().innerHTML = `<div class="qtop"><button class="back">✕</button><b>🧩 Paires · ${variant === 'fam' ? 'espèce ↔ famille' : 'espèce ↔ latin'}</b><span class="combo ghost" id="err">0 erreur</span></div>
+  app().innerHTML = `<div class="qtop"><button class="back">✕</button><b>Paires · ${variant === 'fam' ? 'espèce ↔ famille' : 'espèce ↔ latin'}</b><span class="combo ghost" id="err">0 erreur</span></div>
   <div class="pairs">${cards.map((c, k) => `<button class="pc ${c.kind}" data-k="${k}">${esc(c.t)}</button>`).join('')}</div>`;
   app().querySelector('.back').onclick = home;
   app().querySelectorAll('.pc').forEach(b => b.onclick = () => {
@@ -529,7 +545,7 @@ function pairs() {
       const sec = Math.round((Date.now() - t0) / 1000); const xp = Math.max(20, 70 - errors * 8 - Math.floor(sec / 6));
       addXP(xp); S.correct += 6; const best = S.best.pairs; if (!best || sec < parseInt(best)) S.best.pairs = sec + ' s'; checkBadges({ endSession: true }); save();
       setTimeout(() => {
-        app().innerHTML = `<div class="end"><div class="big">🧩</div><h1>${sec} s</h1><p class="muted">${errors} erreur${errors > 1 ? 's' : ''} · +${xp} XP</p>
+        app().innerHTML = `<div class="end"><div class="big">Paires</div><h1>${sec} s</h1><p class="muted">${errors} erreur${errors > 1 ? 's' : ''} · +${xp} XP</p>
         <div class="splist">${chosen.map(spRow).join('')}</div>
         <div class="row2"><button class="btn" id="home">Accueil</button><button class="btn primary" id="again">Rejouer</button></div></div>`;
         $('#home').onclick = home; $('#again').onclick = pairs; bindRows();
@@ -579,7 +595,7 @@ async function pathGame() {
   };
   const fin = () => {
     addXP(pts); const best = parseInt(S.best.path || 0); if (pts > best) S.best.path = pts + ' pts'; checkBadges({ endSession: true }); save();
-    app().innerHTML = `<div class="end"><div class="big">🪜</div><h1>${pts} points</h1><p class="muted">sur ${ROUNDS * 30} possibles · +${pts} XP</p>
+    app().innerHTML = `<div class="end"><div class="big">Le chemin</div><h1>${pts} points</h1><p class="muted">sur ${ROUNDS * 30} possibles · +${pts} XP</p>
     <p class="small muted">Chaque étage vaut plus que le précédent : 3, 6, 9, 12 points.</p>
     <div class="row2"><button class="btn" id="home">Accueil</button><button class="btn primary" id="again">Rejouer</button></div></div>`;
     $('#home').onclick = home; $('#again').onclick = pathGame;
