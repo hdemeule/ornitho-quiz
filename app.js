@@ -226,9 +226,16 @@ function buildSession(opts) {
   return shuffle(chosen).map(c => QTYPES[c.t].make(c.sp));
 }
 
+function buildMixed(mix, filter) {
+  let out = [];
+  mix.forEach(([types, k]) => { out = out.concat(buildSession({ types, n: k, filter })); });
+  const n = mix.reduce((a, m) => a + m[1], 0);
+  if (out.length < n) { const seen = new Set(out.map(q => q.id)); out = out.concat(buildSession({ types: ['crit', 'chant'], n: n * 2, filter }).filter(q => !seen.has(q.id)).slice(0, n - out.length)); }
+  return shuffle(out);
+}
 /* ====== Modes de jeu ====== */
 const MODES = {
-  daily: { title: 'Session du jour', icon: '🎯', desc: 'Révision espacée, tous types mêlés', types: ['photo', 'crit', 'chant', 'fam', 'sci', 'grp', 'famdesc', 'ref', 'intrus'], n: 10, photos: true },
+  daily: { title: 'Session du jour', icon: '🎯', desc: 'Révision espacée : photos, critères, chants', mix: [[['photo'], 4], [['crit'], 3], [['chant'], 2], [['fam', 'grp', 'famdesc', 'ref', 'intrus', 'sci'], 1]], photos: true },
   photo: { title: 'Qui est-ce ?', icon: '📷', desc: 'Vraies photos, espèces proches en piège', types: ['photo'], n: 10, photos: true },
   crit: { title: 'Critères fins', icon: '🔍', desc: 'Retrouver l\'espèce à partir de tes fiches', types: ['crit'], n: 10 },
   chant: { title: 'À l\'oreille', icon: '🎶', desc: 'Descriptions de chants et cris', types: ['chant'], n: 8 },
@@ -342,8 +349,8 @@ function chapterScreen(grp) {
   const fams = [...new Set(sp.map(s => s.f))];
   const lv = [
     { k: 1, t: 'Niveau 1 · Familles', d: 'Groupe, famille, espèce de référence', types: ['fam', 'grp', 'famdesc', 'ref', 'intrus'] },
-    { k: 2, t: 'Niveau 2 · Espèces', d: 'Reconnaître sur photo', types: ['photo', 'fam'], photos: true },
-    { k: 3, t: 'Niveau 3 · Critères fins', d: 'Portraits, chants, latin', types: ['crit', 'chant', 'sci', 'photo'], photos: true }
+    { k: 2, t: 'Niveau 2 · Espèces', d: 'Reconnaître sur photo', mix: [[['photo'], 8], [['crit'], 2]], photos: true },
+    { k: 3, t: 'Niveau 3 · Critères fins', d: 'Portraits et chants', mix: [[['crit'], 5], [['chant'], 3], [['photo'], 2]], photos: true }
   ];
   app().innerHTML = `<div class="top"><button class="back">‹</button><h1>${esc(grp)}</h1></div>
   <p class="muted">${sp[0]?.cat || ''} · ${fams.map(famLabel).join(', ')}</p>
@@ -355,7 +362,7 @@ function chapterScreen(grp) {
   app().querySelectorAll('.level').forEach(b => b.onclick = () => {
     const l = lv[+b.dataset.l - 1];
     if (l.k > st + 1) { toast('Décroche d\'abord le niveau précédent'); return; }
-    runQuiz({ title: `${grp} · ${l.t.split('·')[1].trim()}`, types: l.types, n: 10, filter: s => s.grp === grp, photos: l.photos, chapter: grp, level: l.k });
+    runQuiz({ title: `${grp} · ${l.t.split('·')[1].trim()}`, types: l.types, mix: l.mix, n: 10, filter: s => s.grp === grp, photos: l.photos, chapter: grp, level: l.k });
   });
   bindRows();
 }
@@ -404,7 +411,7 @@ async function startMode(k) {
   if (m.special === 'blitz') return blitz();
   if (m.special === 'pairs') return pairs();
   if (m.special === 'path') return pathGame();
-  runQuiz({ title: m.title, types: m.types, n: m.n, photos: m.photos, mode: k });
+  runQuiz({ title: m.title, types: m.types, n: m.n, mix: m.mix, photos: m.photos, mode: k });
 }
 const waitPhotos = list => Promise.race([ensurePhotos(list).catch(() => { }), new Promise(r => setTimeout(r, 9000))]);
 async function loadingScreen(msg) {
@@ -412,7 +419,7 @@ async function loadingScreen(msg) {
 }
 async function runQuiz(cfg) {
   if (cfg.photos) { await loadingScreen('Je cherche les photos…'); await waitPhotos(poolFor(cfg.filter)); }
-  const qs = buildSession(cfg).filter(Boolean);
+  const qs = (cfg.mix ? buildMixed(cfg.mix, cfg.filter) : buildSession(cfg)).filter(Boolean);
   if (!qs.length) { toast(cfg.photos ? 'Photos indisponibles : vérifie la connexion' : 'Pas assez de matière pour ce jeu'); return home(); }
   let i = 0, score = 0, combo = 0, xpGain = 0; const missed = [];
   const next = () => {
@@ -495,7 +502,7 @@ function endQuiz(cfg, score, total, xp, missed) {
 /* ====== Contre-la-montre ====== */
 async function blitz() {
   await loadingScreen('Je cherche les photos…'); await waitPhotos(SPECIES());
-  const types = ['photo', 'fam', 'sci', 'crit', 'grp'];
+  const types = ['photo', 'photo', 'photo', 'crit', 'crit', 'chant', 'fam'];
   let end = Date.now() + 60000, score = 0, combo = 0, xp = 0, total = 0, timer;
   const next = () => {
     if (Date.now() >= end) return finish();
