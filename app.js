@@ -945,9 +945,9 @@ async function fiche(sp, back, tab) {
   };
   const phs = photosOf(sp);
   app().innerHTML = `<div class="fhead"><button class="back" aria-label="Retour">‹</button><div><h1>${esc(sp.n)}</h1>${sp.sci ? `<p><i>${esc(sp.sci)}</i></p>` : ''}</div></div>
-  <div class="fphoto photo-wrap" id="fph"><div class="ph-loading">Chargement de la photo…</div></div>
-  <div class="ftabs">${tabs.map(([k, l]) => `<button class="ftab ${k === cur ? 'on' : ''}" data-tab="${k}">${FTAB_ICONS[k]}<span>${l}</span></button>`).join('')}</div>
-  <div class="fbody">${panes[cur]}</div>`;
+  <div class="fgrid"><div class="fphoto photo-wrap" id="fph"><div class="ph-loading">Chargement de la photo…</div></div>
+  <div class="fcol"><div class="ftabs">${tabs.map(([k, l]) => `<button class="ftab ${k === cur ? 'on' : ''}" data-tab="${k}">${FTAB_ICONS[k]}<span>${l}</span></button>`).join('')}</div>
+  <div class="fbody">${panes[cur]}</div></div></div>`;
   const backFn = back || guide;
   app().querySelector('.back').onclick = () => { stopAudio(); backFn(); };
   app().querySelectorAll('[data-tab]').forEach(b => b.onclick = () => { stopAudio(); fiche(sp, back, b.dataset.tab); });
@@ -1046,13 +1046,27 @@ function pathHome() {
       }).join('')}</div></section>`;
   }).join('');
   app().innerHTML = `<header class="pbar"><span class="pstat streak" title="Jours d'affilée"><b>🔥</b>${S.streak || 0}</span><span class="pstat"><b class="xpdot"></b>${S.xp.toLocaleString('fr-BE')} XP</span><span class="pstat"><span class="minring" style="--p:${Math.min(100, Math.round(done / S.goal * 100))}"></span>${done}/${S.goal}</span></header>
-  <div class="trail">${unitHTML}</div>${navBar('chemin')}`;
+  <div class="pwrap"><div class="trail">${unitHTML}</div>${pathSide(cur, done)}</div>${navBar('chemin')}`;
   bindNav();
   app().querySelectorAll('[data-node]').forEach(b => b.onclick = () => nodeSheet(b.dataset.node));
   app().querySelectorAll('[data-skip]').forEach(b => b.onclick = () => skipSheet(+b.dataset.skip));
+  app().querySelectorAll('[data-side]').forEach(b => b.onclick = () => b.dataset.side === 'sos' ? sosHome() : guide());
   app().querySelectorAll('[data-unitguide]').forEach(b => b.onclick = () => { const u = UNITS[+b.dataset.unitguide]; GUIDE.q = ''; GUIDE.grp = u.grps.length === 1 ? u.grps[0] : ''; guide(); });
   const target = cur ? app().querySelector(`[data-node="${cur.n.id}"]`) : null;
   if (target) setTimeout(() => target.scrollIntoView({ block: 'center' }), 30); else window.scrollTo(0, 0);
+}
+function pathSide(cur, done) {
+  const r = rank(); const pct = r.to ? Math.round((S.xp - r.from) / (r.to - r.from) * 100) : 100;
+  const nd = Object.values(P().done).filter(Boolean).length; const tot = allNodes().length;
+  return `<aside class="pside">
+    <div class="pcard prow"><span class="pstat streak"><b>🔥</b>${S.streak || 0} jour${(S.streak || 0) > 1 ? 's' : ''}</span><span class="pstat"><b class="xpdot"></b>${S.xp.toLocaleString('fr-BE')} XP</span></div>
+    <div class="pcard"><small>Rang</small><h3>${esc(r.name)}</h3><div class="bar"><i style="width:${pct}%"></i></div><p class="muted small">${r.to ? `${(r.to - S.xp).toLocaleString('fr-BE')} XP avant « ${esc(r.next)} »` : 'Rang maximum'}</p></div>
+    <div class="pcard"><small>Objectif du jour</small><div class="prow"><div class="ring" style="--p:${Math.min(100, Math.round(done / S.goal * 100))}"><span>${done}/${S.goal}</span></div><p class="small">${done >= S.goal ? 'Objectif atteint.' : `Encore ${S.goal - done} question${S.goal - done > 1 ? 's' : ''}.`}</p></div></div>
+    <div class="pcard"><small>Parcours</small><p class="small"><b>${nd}</b> leçons sur ${tot}${cur ? ` · en cours : ${esc(cur.u.name)}` : ''}</p>
+      ${cur ? `<button class="btn primary wide" data-node="${cur.n.id}">Continuer : ${esc(NODE_INFO[cur.n.t][0])}</button>` : ''}</div>
+    <div class="pcard"><small>Raccourcis</small><div class="pside-links"><button class="btn" data-side="sos">Sosies</button><button class="btn" data-side="guide">Guide</button></div></div>
+    <p class="muted small kbdhint">Au clavier pendant une leçon : 1 à 6 pour répondre, Entrée pour continuer, Échap pour quitter.</p>
+  </aside>`;
 }
 function nodeIcon(t, st) {
   const ck = '<svg viewBox="0 0 32 32"><path d="M8 17l5 5 11-12" stroke="currentColor" stroke-width="4" fill="none"/></svg>';
@@ -1302,6 +1316,17 @@ function bindSync(rerender) {
 }
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible' && SYNC.k && (!SYNC.at || Date.now() - SYNC.at > 60000)) syncNow().then(r => { if (r.ok && document.querySelector('.trail')) pathHome(); });
+});
+
+/* ====== Clavier (ordinateur) ====== */
+document.addEventListener('keydown', e => {
+  if (e.metaKey || e.ctrlKey || e.altKey) return;
+  const tag = (e.target.tagName || '').toLowerCase(); if (tag === 'input' || tag === 'textarea') return;
+  const nx = document.querySelector('.lsheet #nx') || document.querySelector('#fb #nx');
+  if ((e.key === 'Enter' || e.key === ' ') && nx) { e.preventDefault(); nx.click(); return; }
+  if (e.key === 'Escape') { const sb = document.querySelector('.sheetbg'); if (sb) { sb.remove(); return; } const bk = document.querySelector('.ltop .back, .qtop .back'); if (bk) bk.click(); return; }
+  if (/^[1-9]$/.test(e.key)) { const opts = [...document.querySelectorAll('.opt')]; if (opts.some(o => o.classList.contains('good'))) return; const o = opts[+e.key - 1]; if (o) { e.preventDefault(); o.click(); } return; }
+  if ((e.key === 'e' || e.key === 'E')) { const pl = document.querySelector('.play.big, .clue .play'); if (pl) pl.click(); }
 });
 
 /* ====== Démarrage ====== */

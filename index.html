@@ -284,6 +284,56 @@ blockquote{margin:14px 0;padding:14px 16px;background:var(--paper);border-left:4
 .lstats small{display:block;font:600 10.5px var(--body);letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
 .lstats b{font:400 30px var(--display);color:var(--slate)}
 .lend h1{font-size:44px}
+.pside{display:none}
+@media (min-width:960px){
+  body:has(.tabbar){padding-left:232px}
+  #app{max-width:1060px;padding:0 32px calc(40px + env(safe-area-inset-bottom,0px))}
+  .tabbar{top:0;bottom:0;right:auto;width:232px;flex-direction:column;justify-content:flex-start;gap:4px;border-top:0;border-right:1px solid var(--line);padding:24px 14px}
+  .tabbar::before{content:"OrnithoQuiz";font:400 30px var(--display);text-transform:uppercase;color:var(--slate);letter-spacing:.02em;padding:0 10px 22px}
+  .tabbar button{flex:none;flex-direction:row;justify-content:flex-start;gap:14px;padding:12px 12px;font-size:13px;letter-spacing:.1em;text-transform:uppercase;border:2px solid transparent}
+  .tabbar button.on{border-color:var(--red);background:var(--badbg)}
+  .pbar{display:none}
+  .pwrap{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:40px;align-items:start;padding-top:24px}
+  .trail{max-width:600px;width:100%;justify-self:center}
+  .pside{display:flex;flex-direction:column;gap:14px;position:sticky;top:24px}
+  .pcard{border:1.5px solid var(--line);background:var(--paper);padding:16px}
+  .pcard>small{display:block;font:600 11px var(--body);letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin-bottom:6px}
+  .pcard h3{font:400 30px var(--display);text-transform:uppercase;color:var(--slate);margin:0;letter-spacing:.02em}
+  .pcard .bar{margin-top:8px}
+  .prow{display:flex;align-items:center;justify-content:space-between;gap:12px}
+  .pside-links{display:flex;gap:8px}.pside-links .btn{flex:1}
+  .kbdhint{margin:0 4px}
+  .ltop,.lq,.qtop,.q,.end{max-width:760px;margin-left:auto;margin-right:auto}
+  .lq .opts,.q .opts{grid-template-columns:1fr 1fr}
+  .opts{counter-reset:o}
+  .opt{counter-increment:o;position:relative;padding-left:44px}
+  .opt::before{content:counter(o);position:absolute;left:12px;top:50%;transform:translateY(-50%);width:22px;height:22px;border:1.5px solid var(--line);display:grid;place-items:center;font:600 12px var(--body);color:var(--muted)}
+  .opt.good::before,.opt.bad::before{border-color:rgba(255,255,255,.6);color:#fff}
+  .lq{padding-bottom:30vh}
+  .lsin{max-width:900px}
+  .lsbody{max-height:42vh}
+  .photo-wrap img{max-height:56vh}
+  .grid{grid-template-columns:repeat(auto-fill,minmax(220px,1fr))}
+  .chapters{grid-template-columns:1fr 1fr;column-gap:24px}
+  .gcards{grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:14px}
+  .gbar{margin-top:0}
+  .fhead{margin:0;padding:22px 24px}
+  .fgrid{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:28px;align-items:start;margin-top:20px}
+  .fphoto{margin:0;position:sticky;top:20px}
+  .fphoto img{max-height:70vh}
+  .ftabs{margin:0}
+  .badges{grid-template-columns:repeat(auto-fill,minmax(200px,1fr))}
+  .sosph{grid-template-columns:repeat(auto-fill,minmax(180px,1fr))}
+  .sheet{max-width:520px;margin-bottom:auto;margin-top:auto}
+  .sheetbg{align-items:center}
+  .top{padding-top:28px}
+}
+@media (min-width:960px) and (hover:hover){
+  .opt:hover:not(.good):not(.bad):not(.dim){border-color:var(--slate)}
+  .gcard:hover{border-color:var(--slate)}
+  .node:hover{filter:brightness(1.08)}
+  .tabbar button:hover:not(.on){background:var(--soft)}
+}
 </style>
 </head>
 <body>
