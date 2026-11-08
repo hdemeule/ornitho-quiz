@@ -136,11 +136,12 @@ const QTYPES = {
   },
   chant: {
     label: 'À l\'oreille', icon: '🎶',
-    ok: sp => sp.v && sp.v.length > 20,
+    ok: sp => (sp.v && sp.v.length > 20) || hasAud(sp.n),
     make(sp) {
-      const pool = SPECIES().filter(s => s.v && s.v.length > 20);
+      const pool = SPECIES().filter(s => (s.v && s.v.length > 20) || hasAud(s.n));
       const opts = shuffle([sp, ...distract(sp, pool)]);
-      return { id: 'chant:' + sp.n, sp, kind: 'text', prompt: 'Qui chante ainsi ?', quote: mask(sp.v, sp), opts: opts.map(o => o.n), answer: sp.n };
+      const txt = sp.v && sp.v.length > 20 ? mask(sp.v, sp) : '';
+      return { id: 'chant:' + sp.n, sp, kind: 'text', audio: hasAud(sp.n), prompt: txt ? 'Qui chante ainsi ?' : 'Qui chante ainsi ? Écoute.', quote: txt, opts: opts.map(o => o.n), answer: sp.n };
     }
   },
   fam: {
@@ -321,6 +322,7 @@ function home() {
     <div><b>Objectif du jour</b><br><span class="muted">${dueN} révision${dueN > 1 ? 's' : ''} en attente</span></div>
     <button class="btn primary" data-mode="daily">Jouer</button>
   </section>
+  <button class="homesearch" data-go="carnet"><span>Rechercher un oiseau…</span></button>
   <h2>Jeux</h2>
   <div class="grid">${Object.entries(MODES).filter(([k]) => k !== 'daily').map(([k, m]) => `
     <button class="tile" data-mode="${k}"><span class="ti">${ICONS[k] || ""}</span><b>${m.title}</b><small>${m.desc}</small>${S.best[k] ? `<em>Record ${S.best[k]}</em>` : ''}</button>`).join('')}
@@ -331,7 +333,7 @@ function home() {
     <button class="chap" data-chap="${esc(g.grp)}"><span>${esc(g.grp)}</span><span class="stars">${'★'.repeat(S.stars[g.grp] || 0)}<i>${'☆'.repeat(3 - (S.stars[g.grp] || 0))}</i></span><small>${g.n} esp. · maîtrise ${g.m}%</small><span class="mbar"><i style="width:${g.m}%"></i></span></button>`).join('')}</div>`).join('')}
   <h2>Carnet</h2>
   <div class="row2">
-    <button class="btn" data-go="carnet">📖 Parcourir les fiches</button>
+    <button class="btn primary" data-go="carnet">Guide des espèces</button>
     <button class="btn" data-go="badges">🏅 Badges (${S.badges.length}/${BADGES.length})</button>
   </div>
   <p class="foot muted small">${DB.sp.length} espèces et ${DB.fams.length} familles issues de ta base Notion « Mooc Ornitho database » (synchro du ${esc(DB.synced)}). Photos : Wikipédia / Wikimedia Commons.<br><button class="link" data-go="settings">Réglages</button></p>`;
@@ -374,23 +376,6 @@ function spRow(s) {
 }
 function bindRows() { app().querySelectorAll('[data-sp]').forEach(b => b.onclick = () => fiche(DB.sp.find(s => s.n === b.dataset.sp))); }
 
-/* ====== Fiche ====== */
-async function fiche(sp, back) {
-  const f = DB.fams.find(x => x.n === sp.f) || {};
-  app().innerHTML = `<div class="top"><button class="back">‹</button><h1>${esc(sp.n)}</h1></div>
-  ${sp.sci ? `<p class="sci">${esc(sp.sci)}</p>` : ''}
-  <div class="photo-wrap" id="fph"><div class="ph-loading">Chargement de la photo…</div></div>
-  ${path(sp)}
-  ${sp.d && !sp.solo ? `<div class="block"><h4>Critères</h4><p>${esc(sp.d)}</p></div>` : ''}
-  ${sp.v ? `<div class="block"><h4>Vocalisation${sp.vt ? ' · ' + esc(sp.vt) : ''}</h4><p>${esc(sp.v)}</p>${sp.xc[0] ? `<a class="btn small" target="_blank" rel="noopener" href="${esc(sp.xc[0])}">▶ Écouter sur xeno-canto</a>` : ''}</div>` : ''}
-  ${SOS_INDEX[sp.n] ? `<button class="btn wide" id="tosos">Comparer avec ses sosies (${esc(SOS_INDEX[sp.n].g.name)})</button>` : ''}
-  ${f.d ? `<div class="block fam"><h4>Famille ${famLabel(f.n)}</h4><p>${esc(f.d)}</p>${f.sp ? `<p class="muted small">${esc(f.sp)}</p>` : ''}${f.ref ? `<p class="small">Espèce de référence : <b>${esc(f.ref)}</b></p>` : ''}</div>` : ''}`;
-  app().querySelector('.back').onclick = back || carnet;
-  if ($('#tosos')) $('#tosos').onclick = () => sosGroup(SOS_INDEX[sp.n].g, () => fiche(sp, back));
-  window.scrollTo(0, 0);
-  await waitPhotos([sp]);
-  showPhoto($('#fph'), photosOf(sp)[0], sp);
-}
 function path(sp) {
   return `<div class="path"><span>${esc(sp.cat)}</span><b>›</b><span>${esc(sp.grp)}</span><b>›</b><span>${famLabel(sp.f)}</span>${sp.sub ? `<b>›</b><span>${esc(sp.sub)}</span>` : ''}</div>`;
 }
@@ -449,10 +434,11 @@ function renderQ(q, st, onAnswer, onNext, onQuit, timed) {
     <p class="prompt">${esc(q.prompt)}</p>
     ${q.hint ? `<p class="hint">${esc(q.hint)}</p>` : ''}
     ${q.quote ? `<blockquote>${esc(q.quote)}</blockquote>` : ''}
+    ${q.audio ? `<button class="play big" data-aud="${esc(q.sp.n)}"><i></i>Écouter le chant</button>` : ''}
     <div class="opts">${q.opts.map((o, k) => `<button class="opt ${q.italic ? 'it' : ''}" data-k="${k}">${esc(o)}</button>`).join('')}</div>
     <div id="fb"></div>
   </div>`;
-  app().querySelector('.back').onclick = onQuit;
+  app().querySelector('.back').onclick = () => { stopAudio(); onQuit(); };
   if (q.kind === 'photo') showPhoto($('#qph'), q.img, q.sp, true);
   let done = false;
   app().querySelectorAll('.opt').forEach(b => b.onclick = () => {
@@ -479,15 +465,23 @@ function feedback(q, ok, onNext, timed, chosen) {
   if (q.sosie) body = q.explain(chosen, ok);
   else if (q.intrusFam) body = `<p><b>${esc(sp.n)}</b> appartient aux ${famLabel(sp.f)}, pas aux ${famLabel(q.intrusFam)}.</p>`;
   else if (q.fam) body = `<p><b>${famLabel(q.fam.n)}</b> · ${esc(q.fam.grp)} · ${esc(q.fam.cat)}</p>${q.fam.d && q.id.startsWith('grp') ? '' : ''}${q.fam.ref ? `<p class="small">Espèce de référence : ${esc(q.fam.ref)}</p>` : ''}${q.fam.sp ? `<p class="small muted">${esc(q.fam.sp)}</p>` : ''}`;
-  else body = `<p><b>${esc(sp.n)}</b>${sp.sci ? ` <i>${esc(sp.sci)}</i>` : ''}</p>${path(sp)}${sp.d && !sp.solo && !q.id.startsWith('crit') ? `<p class="small">${esc(sp.d)}</p>` : ''}${q.id.startsWith('crit') ? `<p class="small">${esc(sp.d)}</p>` : ''}${q.id.startsWith('chant') && sp.xc[0] ? `<a class="btn small" target="_blank" rel="noopener" href="${esc(sp.xc[0])}">▶ Écouter sur xeno-canto</a>` : ''}`;
+  else body = `<p><b>${esc(sp.n)}</b>${sp.sci ? ` <i>${esc(sp.sci)}</i>` : ''}</p>${path(sp)}${sp.d && !sp.solo && !q.id.startsWith('crit') ? `<p class="small">${esc(sp.d)}</p>` : ''}${q.id.startsWith('crit') ? `<p class="small">${esc(sp.d)}</p>` : ''}${q.id.startsWith('chant') && sp.xc[0] && !hasAud(sp.n) ? `<a class="btn small" target="_blank" rel="noopener" href="${esc(sp.xc[0])}">▶ Écouter sur xeno-canto</a>` : ''}`;
+  let phBlock = '';
+  const spAns = !q.fam && !q.intrusFam && !q.id.startsWith('sci');
+  if (q.sosie && q.pairNames) phBlock = q.kind === 'reflex' || ok ? photoSwitch(q.pairNames.map(n => ({ label: n, ph: phOf(n) }))) : wrongRightSwitch(chosen, q.answer, false);
+  else if (!ok && spAns && phOf(chosen)) phBlock = wrongRightSwitch(chosen, q.answer, q.kind === 'photo');
+  else if (q.kind !== 'photo' && spAns) phBlock = `<div class="photo-wrap small" id="fbph"></div>`;
   fb.innerHTML = `<div class="fbcard ${ok ? 'ok' : 'ko'}"><div class="fbh">${ok ? '✓' : '✗'} ${praise}</div>
     ${why}
-    ${q.kind !== 'photo' && !q.fam && !q.intrusFam ? `<div class="photo-wrap small" id="fbph"></div>` : ''}
-    ${body}
+    ${q.sosie ? body : ''}
+    ${phBlock}
+    ${q.sosie ? '' : body}
+    ${spAns && !q.sosie ? listenPair(chosen, q.answer, ok) : ''}
+    ${q.sosie && q.pairNames ? `<div class="listen"><small>Écouter</small>${q.pairNames.map(n => audBtn(n, n)).join('')}</div>`.replace('<div class="listen"><small>Écouter</small></div>', '') : ''}
     <button class="btn primary wide" id="nx">Continuer</button></div>`;
   if (q.kind === 'photo' && q.img) { const w = $('#qph'); fillCredit(w, q.img, sp); }
   if ($('#fbph')) waitPhotos([sp]).then(() => showPhoto($('#fbph'), photosOf(sp)[0], sp));
-  $('#nx').onclick = onNext;
+  $('#nx').onclick = () => { stopAudio(); onNext(); };
   setTimeout(() => fb.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 50);
 }
 function endQuiz(cfg, score, total, xp, missed) {
@@ -608,7 +602,7 @@ async function pathGame() {
         const fb = $('#fb');
         const chosenP = s.opts[+b.dataset.j]; const F = DB.fams.find(f => f.n === sp.f);
         const whyP = ok ? '' : k === 0 ? `<p class="why">${esc(sp.n)} est un <b>${esc(sp.cat)}</b>, pas un ${esc(chosenP)}.</p>` : whyWrong({ id: ['', 'grp', 'fam', 'id'][k] + ':x', sp, fam: F, answer: s.a }, chosenP);
-        fb.innerHTML = `<div class="fbcard ${ok ? 'ok' : 'ko'}"><div class="fbh">${ok ? '✓ Chemin complet' : `✗ Arrêt à l'étage ${k + 1}`}</div>${whyP}<p><b>${esc(sp.n)}</b>${sp.sci ? ` <i>${esc(sp.sci)}</i>` : ''}</p>${path(sp)}<button class="btn primary wide" id="nx">Continuer</button></div>`;
+        fb.innerHTML = `<div class="fbcard ${ok ? 'ok' : 'ko'}"><div class="fbh">${ok ? '✓ Chemin complet' : `✗ Arrêt à l'étage ${k + 1}`}</div>${whyP}${!ok && k === 3 ? wrongRightSwitch(chosenP, sp.n, true) : ''}<p><b>${esc(sp.n)}</b>${sp.sci ? ` <i>${esc(sp.sci)}</i>` : ''}</p>${path(sp)}<button class="btn primary wide" id="nx">Continuer</button></div>`;
         fillCredit($('#qph'), ph, sp);
         $('#nx').onclick = () => { round++; play(); };
       });
@@ -626,19 +620,7 @@ async function pathGame() {
 }
 
 /* ====== Carnet, badges, réglages ====== */
-function carnet() {
-  const groups = chapters();
-  app().innerHTML = `<div class="top"><button class="back">‹</button><h1>Carnet</h1></div>
-  <input class="search" placeholder="Chercher une espèce ou une famille…" id="q">
-  <div id="list"></div>`;
-  app().querySelector('.back').onclick = home;
-  const draw = (f = '') => {
-    const t = f.toLowerCase();
-    $('#list').innerHTML = groups.map(g => { const sp = SPECIES().filter(s => s.grp === g.grp && (!t || (s.n + ' ' + s.sci + ' ' + s.f).toLowerCase().includes(t))); return sp.length ? `<h3>${esc(g.grp)}</h3><div class="splist">${sp.map(spRow).join('')}</div>` : ''; }).join('') || '<p class="muted">Rien trouvé.</p>';
-    bindRows();
-  };
-  $('#q').oninput = e => draw(e.target.value); draw();
-}
+const carnet = () => guide();
 function badgesScreen() {
   app().innerHTML = `<div class="top"><button class="back">‹</button><h1>Badges</h1></div>
   <div class="badges">${BADGES.map(([id, ic, n, d]) => `<div class="badge ${S.badges.includes(id) ? 'on' : ''}"><span>${ic}</span><b>${n}</b><small>${d}</small></div>`).join('')}</div>
@@ -657,6 +639,60 @@ function settings() {
   $('#ex').onclick = async () => { try { await navigator.clipboard.writeText(JSON.stringify(S)); toast('Progression copiée'); } catch (e) { prompt('Copie ce texte :', JSON.stringify(S)); } };
   $('#im').onclick = () => { const t = prompt('Colle ici ta progression :'); if (!t) return; try { S = Object.assign(load(), JSON.parse(t)); save(); toast('Progression importée'); home(); } catch (e) { toast('Texte invalide'); } };
   $('#rz').onclick = () => { if (confirm('Effacer définitivement XP, étoiles et révisions ?')) { localStorage.removeItem(KEY); S = load(); home(); } };
+}
+
+/* ====== Sons ====== */
+let AUDIO = {};
+const audKey = n => AUDIO[n] ? n : (SOS_INDEX[n] && SOS_INDEX[n].s.w && AUDIO[SOS_INDEX[n].s.w] ? SOS_INDEX[n].s.w : null);
+const hasAud = n => !!audKey(n);
+let PLAYER = null, PLAYBTN = null;
+function stopAudio() { if (PLAYER) { PLAYER.pause(); } if (PLAYBTN) PLAYBTN.classList.remove('playing'); PLAYBTN = null; }
+function playAudio(n, btn) {
+  const k = audKey(n); if (!k) return;
+  if (PLAYBTN === btn && PLAYER && !PLAYER.paused) { stopAudio(); return; }
+  stopAudio();
+  PLAYER = PLAYER || new Audio(); PLAYER.src = AUDIO[k].u; PLAYBTN = btn; btn.classList.add('playing', 'loading');
+  PLAYER.oncanplay = () => btn.classList.remove('loading');
+  PLAYER.onended = () => stopAudio();
+  PLAYER.onerror = () => { btn.classList.remove('loading'); stopAudio(); toast(navigator.onLine ? 'Son indisponible' : 'Pas de son hors ligne'); };
+  PLAYER.play().catch(() => { });
+}
+function audBtn(n, label, cls) { return hasAud(n) ? `<button class="play ${cls || ''}" data-aud="${esc(n)}"><i></i>${esc(label)}</button>` : ''; }
+function audCredit(n) { const k = audKey(n); if (!k) return ''; const a = AUDIO[k]; return `<a class="audcredit" href="${esc(a.page)}" target="_blank" rel="noopener">Son : ${esc(a.by)}</a>`; }
+document.addEventListener('click', e => { const b = e.target.closest('[data-aud]'); if (b) { e.preventDefault(); playAudio(b.dataset.aud, b); } });
+function listenPair(chosen, right, ok) {
+  const parts = [];
+  if (!ok && chosen && hasAud(chosen)) parts.push(audBtn(chosen, 'Ton choix · ' + chosen, 'w'));
+  if (hasAud(right)) parts.push(audBtn(right, (ok ? '' : 'Bonne réponse · ') + right, 'r'));
+  if (!parts.length) return '';
+  return `<div class="listen"><small>Écouter</small>${parts.join('')}${audCredit(right)}</div>`;
+}
+
+/* ====== Comparateur de photos ====== */
+let PSW = 0;
+function photoSwitch(items, start) {
+  const id = 'psw' + (++PSW);
+  setTimeout(() => bindSwitch(id, items, start || 0), 0);
+  return `<div class="pswitch" id="${id}"><div class="photo-wrap small" data-ph><div class="ph-loading">Chargement…</div></div>
+  <div class="ptabs">${items.map((it, i) => `<button class="ptab ${it.cls || ''}" data-i="${i}"><small>${esc(it.sub || '')}</small>${esc(it.label)}</button>`).join('')}</div>
+  ${items.length > 1 ? '<p class="small muted ptip">Touche un nom pour changer de photo.</p>' : ''}</div>`;
+}
+async function bindSwitch(id, items, start) {
+  await waitPhotos(items.map(i => i.ph));
+  const root = document.getElementById(id); if (!root) return;
+  const show = i => {
+    root.querySelectorAll('.ptab').forEach((b, j) => b.classList.toggle('on', j === i));
+    showPhoto(root.querySelector('[data-ph]'), photosOf(items[i].ph)[0], items[i].ph);
+  };
+  root.querySelectorAll('.ptab').forEach(b => b.onclick = () => show(+b.dataset.i));
+  show(start);
+}
+const phOf = n => { const d = DB.sp.find(s => s.n === n); if (d) return { n: d.n, sci: d.sci }; const x = SOS_INDEX[n]; return x ? sosPh(x.s) : null; };
+function wrongRightSwitch(chosenName, rightName, startOnChosen) {
+  const c = phOf(chosenName), r = phOf(rightName);
+  if (!r) return '';
+  if (!c) return photoSwitch([{ label: rightName, sub: 'Bonne réponse', cls: 'r', ph: r }]);
+  return photoSwitch([{ label: chosenName, sub: 'Ton choix', cls: 'w', ph: c }, { label: rightName, sub: 'Bonne réponse', cls: 'r', ph: r }], startOnChosen ? 0 : 1);
 }
 
 /* ====== Pourquoi c'est faux ====== */
@@ -731,7 +767,7 @@ function sosReflex(g) {
   const others = shuffle(g.dims.map(d => d[0]).filter(k => k !== key)).slice(0, 2).map(k => dimLabel(g, k));
   const A = sosSp(g, p[0]), B = sosSp(g, p[1]);
   return {
-    id: `sos:${g.id}:r:${g.pairs.indexOf(p)}`, sosie: true, kind: 'text', sp: sosPh(B),
+    id: `sos:${g.id}:r:${g.pairs.indexOf(p)}`, sosie: true, kind: 'reflex', sp: sosPh(B), pairNames: [p[0], p[1]],
     prompt: `${p[0]} ou ${p[1]} : que regardes-tu en premier ?`, hint: g.name,
     opts: shuffle([lab, SOS_TRAP, ...others]), answer: lab,
     explain(ch, ok) {
@@ -747,12 +783,12 @@ function sosDuel(g) {
   const p = pick(g.pairs); const key = p[2];
   const [A, B] = shuffle([sosSp(g, p[0]), sosSp(g, p[1])]);
   return {
-    id: `sos:${g.id}:d:${g.pairs.indexOf(p)}`, sosie: true, kind: 'text', sp: sosPh(A),
+    id: `sos:${g.id}:d:${g.pairs.indexOf(p)}`, sosie: true, kind: 'text', sp: sosPh(A), pairNames: [A.n, B.n],
     prompt: `Lequel a : ${sosVal(A.v[key]).toLowerCase()} ?`, hint: `${g.name} · ${dimLabel(g, key)}`,
     opts: shuffle([A.n, B.n]), answer: A.n,
     explain(ch, ok) {
-      const t = ok ? '' : `<p class="why">Tu as choisi <b>${esc(B.n)}</b>, mais lui a : ${esc(sosVal(B.v[key]).toLowerCase())}.</p>`;
-      return t + sosTable(g, A, B, [key], ok ? '' : 'la bonne réponse', ok ? '' : 'ton choix', true) + `<p class="retiens"><b>À retenir</b>${esc(p[3])}</p>`;
+      if (ok) return sosTable(g, A, B, [key], '', '', true) + `<p class="retiens"><b>À retenir</b>${esc(p[3])}</p>`;
+      return `<p class="why">Tu as choisi <b>${esc(B.n)}</b>, mais lui a : ${esc(sosVal(B.v[key]).toLowerCase())}.</p>` + sosTable(g, B, A, [key], 'ton choix', 'la bonne réponse', true) + `<p class="retiens"><b>À retenir</b>${esc(p[3])}</p>`;
     }
   };
 }
@@ -783,7 +819,7 @@ function sosClue(g, s, st, done, go) {
     const pts = max - n + 1;
     app().innerHTML = `<div class="qtop"><button class="back" aria-label="Quitter">✕</button><div class="ladder">${g.dims.map((_, j) => `<i class="${j < n ? 'on' : ''}"></i>`).join('')}</div><span class="combo ghost">${st.idx + 1}/${st.total}</span></div>
     <div class="q"><p class="hint">${esc(g.name)} · indice par indice</p><p class="prompt">Qui est-ce ?</p>
-    <div class="clues">${g.dims.slice(0, n).map(d => `<div class="clue"><small>${esc(d[1])}</small>${esc(sosVal(s.v[d[0]]))}</div>`).join('')}</div>
+    <div class="clues">${g.dims.slice(0, n).map(d => `<div class="clue"><small>${esc(d[1])}</small>${esc(sosVal(s.v[d[0]]))}${d[0] === 'voix' && hasAud(s.n) ? `<button class="play" data-aud="${esc(s.n)}"><i></i>Écouter</button>` : ''}</div>`).join('')}</div>
     ${n < max && !answered ? `<button class="btn wide" id="more">Indice suivant · ${pts - 1} pt${pts - 1 > 1 ? 's' : ''} si tu trouves</button>` : ''}
     <p class="small muted">${answered ? '' : `Réponds maintenant : ${pts} point${pts > 1 ? 's' : ''}.`}</p>
     <div class="opts">${opts.map((o, k) => `<button class="opt" data-k="${k}">${esc(o)}</button>`).join('')}</div><div id="fb"></div></div>`;
@@ -799,10 +835,10 @@ function sosClue(g, s, st, done, go) {
       const c = sosSp(g, ch);
       $('#fb').innerHTML = `<div class="fbcard ${ok ? 'ok' : 'ko'}"><div class="fbh">${ok ? `✓ Trouvé avec ${n} indice${n > 1 ? 's' : ''}` : '✗ Pas cette fois'}</div>
         ${ok ? `<p><b>${esc(s.n)}</b> <i>${esc(s.sci)}</i></p>` : `<p class="why">Tu as choisi <b>${esc(ch)}</b>, mais c'est <b>${esc(s.n)}</b>.</p>${sosCompare(g, c, s)}`}
-        <div class="photo-wrap small" id="fbph"></div>
+        ${ok ? photoSwitch([{ label: s.n, sub: 'Bonne réponse', cls: 'r', ph: sosPh(s) }]) : wrongRightSwitch(ch, s.n, false)}
+        ${listenPair(ch, s.n, ok)}
         <button class="btn primary wide" id="nx">Continuer</button></div>`;
-      waitPhotos([sosPh(s)]).then(() => showPhoto($('#fbph'), photosOf(sosPh(s))[0], sosPh(s)));
-      $('#nx').onclick = go;
+      $('#nx').onclick = () => { stopAudio(); go(); };
       setTimeout(() => $('#fb').scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 50);
     });
   };
@@ -840,7 +876,7 @@ async function sosGroup(g, back) {
   <div class="duels">${g.pairs.map(p => `<div class="block"><h4>${esc(p[0])} / ${esc(p[1])} · ${esc(dimLabel(g, p[2]))}</h4><p>${esc(p[3])}</p></div>`).join('')}</div>
   <h2>Fiche comparative</h2>
   <div class="sosph">${g.sp.map((s, i) => `<figure><div class="photo-wrap small" id="sph${i}"></div><figcaption>${esc(s.n)}</figcaption></figure>`).join('')}</div>
-  ${order.map(d => `<div class="block dimblock"><h4>${readRank(g, d[0]) < 9 ? `${readRank(g, d[0]) + 1}. ` : ''}${esc(d[1])}</h4>${g.sp.map(s => `<p><b>${esc(s.n)}</b> ${esc(sosVal(s.v[d[0]]))}</p>`).join('')}</div>`).join('')}
+  ${order.map(d => `<div class="block dimblock"><h4>${readRank(g, d[0]) < 9 ? `${readRank(g, d[0]) + 1}. ` : ''}${esc(d[1])}</h4>${g.sp.map(s => `<p><b>${esc(s.n)}</b> ${esc(sosVal(s.v[d[0]]))}${d[0] === 'voix' ? ' ' + audBtn(s.n, 'Écouter', 'mini') : ''}</p>`).join('')}</div>`).join('')}
   <p class="small muted">Critères alignés sur Le Guide ornitho : ouvre la planche du groupe pour les voir dessinés.</p>`;
   app().querySelector('.back').onclick = back || sosHome;
   $('#play').onclick = () => sosRun([g], g.name, g.id);
@@ -849,11 +885,96 @@ async function sosGroup(g, back) {
   g.sp.forEach((s, i) => { const el = $('#sph' + i); if (el) showPhoto(el, photosOf(sosPh(s))[0], sosPh(s), true); });
 }
 
+/* ====== Guide des espèces ====== */
+const norm = t => (t || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[’']/g, ' ');
+const GUIDE = { q: '', grp: '', y: 0 };
+function guideFams() {
+  const order = { 'Non-Passereau': 0, 'Passereau': 1 };
+  const fams = [...new Set(SPECIES().map(s => s.f))].map(n => DB.fams.find(f => f.n === n) || { n, grp: '', cat: '' });
+  return fams.sort((a, b) => (order[a.cat] ?? 2) - (order[b.cat] ?? 2) || (a.grp || '').localeCompare(b.grp || '', 'fr') || a.n.localeCompare(b.n));
+}
+function guide() {
+  const groups = [...new Set(guideFams().map(f => f.grp).filter(Boolean))];
+  app().innerHTML = `<div class="gbar"><button class="back" aria-label="Retour">‹</button><input class="search" id="gq" type="search" placeholder="Recherche…" value="${esc(GUIDE.q)}" autocomplete="off"><button class="gfilter ${GUIDE.grp ? 'on' : ''}" id="gf" aria-label="Filtrer"><i></i><i></i><i></i></button></div>
+  <div class="gchips" id="gchips" ${GUIDE.showF ? '' : 'hidden'}><button class="chip ${!GUIDE.grp ? 'on' : ''}" data-grp="">Tous</button>${groups.map(g => `<button class="chip ${GUIDE.grp === g ? 'on' : ''}" data-grp="${esc(g)}">${esc(g)}</button>`).join('')}</div>
+  <div id="glist"></div>`;
+  app().querySelector('.back').onclick = home;
+  $('#gf').onclick = () => { GUIDE.showF = !GUIDE.showF; $('#gchips').hidden = !GUIDE.showF; };
+  app().querySelectorAll('[data-grp]').forEach(b => b.onclick = () => { GUIDE.grp = b.dataset.grp; app().querySelectorAll('[data-grp]').forEach(x => x.classList.toggle('on', x === b)); $('#gf').classList.toggle('on', !!GUIDE.grp); draw(); });
+  const draw = () => {
+    const t = norm(GUIDE.q);
+    const html = guideFams().filter(f => !GUIDE.grp || f.grp === GUIDE.grp).map(f => {
+      const sp = SPECIES().filter(s => s.f === f.n && (!t || norm(s.n + ' ' + s.sci + ' ' + s.f + ' ' + s.grp).includes(t)));
+      if (!sp.length) return '';
+      return `<section class="gfam"><div class="gfh"><div><h2>${esc(famLabel(f.n))}</h2><small>${esc(f.grp || '')}${f.cat ? ' · ' + esc(f.cat) : ''}</small></div>${f.d ? `<button class="ginfo" data-fam="${esc(f.n)}">Info</button>` : ''}</div>
+      <div class="gcards">${sp.map(s => `<button class="gcard" data-sp="${esc(s.n)}"><b>${esc(s.n)}</b><i>${esc(s.sci)}</i><span class="gimg" data-img="${esc(s.n)}">${gThumb(s)}</span></button>`).join('')}</div></section>`;
+    }).join('');
+    $('#glist').innerHTML = html || '<p class="muted center-txt">Aucun oiseau ne correspond.</p>';
+    $('#glist').querySelectorAll('[data-sp]').forEach(b => b.onclick = () => { GUIDE.y = window.scrollY; fiche(DB.sp.find(s => s.n === b.dataset.sp), () => { guide(); window.scrollTo(0, GUIDE.y); }); });
+    $('#glist').querySelectorAll('[data-fam]').forEach(b => b.onclick = () => { GUIDE.y = window.scrollY; famInfo(b.dataset.fam); });
+  };
+  $('#gq').oninput = e => { GUIDE.q = e.target.value; draw(); };
+  draw();
+  if (!SPECIES().every(s => s.n in PHOTOS)) waitPhotos(SPECIES()).then(() => app().querySelectorAll('[data-img]').forEach(el => { const s = DB.sp.find(x => x.n === el.dataset.img); if (s) el.innerHTML = gThumb(s); }));
+}
+function gThumb(s) { const p = photosOf(s)[0]; return p ? `<img src="${esc(p.src)}" alt="" loading="lazy">` : ''; }
+function famInfo(fn) {
+  const f = DB.fams.find(x => x.n === fn); const sp = SPECIES().filter(s => s.f === fn);
+  app().innerHTML = `<div class="fhead"><button class="back" aria-label="Retour">‹</button><div><h1>${esc(famLabel(f.n))}</h1><p>${esc(f.grp || '')} · ${esc(f.cat || '')}</p></div></div>
+  <div class="fbody"><p>${esc(f.d)}</p>${f.sp ? `<p class="muted">${esc(f.sp)}</p>` : ''}${f.ref ? `<p>Espèce de référence : <b>${esc(f.ref)}</b></p>` : ''}
+  <h3>${sp.length} espèce${sp.length > 1 ? 's' : ''} dans ta base</h3><div class="splist">${sp.map(spRow).join('')}</div></div>`;
+  app().querySelector('.back').onclick = () => { guide(); window.scrollTo(0, GUIDE.y); };
+  app().querySelectorAll('[data-sp]').forEach(b => b.onclick = () => fiche(DB.sp.find(s => s.n === b.dataset.sp), () => famInfo(fn)));
+  window.scrollTo(0, 0);
+}
+const FTAB_ICONS = {
+  oiseau: '<svg viewBox="0 0 32 32"><path d="M4 22c4 0 6-2 8-5 2-4 5-7 10-7 2 0 3 1 4 2l3 1-3 1c0 6-5 10-12 10H8l-4 2z" fill="currentColor"/></svg>',
+  voix: '<svg viewBox="0 0 32 32"><path d="M5 12h5l7-6v20l-7-6H5z" fill="currentColor"/><path d="M21 11c2 3 2 7 0 10M24 8c4 5 4 11 0 16" stroke="currentColor" stroke-width="2" fill="none"/></svg>',
+  famille: '<svg viewBox="0 0 32 32"><circle cx="16" cy="16" r="12" stroke="currentColor" stroke-width="2.5" fill="none"/><path d="M16 14v9M16 9v2" stroke="currentColor" stroke-width="3"/></svg>',
+  sosies: '<svg viewBox="0 0 32 32"><circle cx="11" cy="16" r="7" stroke="currentColor" stroke-width="2.5" fill="none"/><circle cx="21" cy="16" r="7" stroke="currentColor" stroke-width="2.5" fill="none"/></svg>'
+};
+async function fiche(sp, back, tab) {
+  const f = DB.fams.find(x => x.n === sp.f) || {};
+  const sos = SOS_INDEX[sp.n];
+  const tabs = [['oiseau', 'Oiseau'], ['voix', 'Voix'], ['famille', 'Famille']].concat(sos ? [['sosies', 'Sosies']] : []);
+  const cur = tab || 'oiseau';
+  const panes = {
+    oiseau: `${hasAud(sp.n) ? `<div class="fsound">${audBtn(sp.n, sp.vt ? sp.vt.toLowerCase() : 'écouter', 'flat')}</div>` : ''}
+      ${path(sp)}
+      ${sp.d && !sp.solo ? `<p class="ftext">${esc(sp.d)}</p>` : '<p class="muted">Pas encore de critères dans ta base Notion pour cette espèce.</p>'}
+      ${sos ? sosRowsFor(sos) : ''}`,
+    voix: `${hasAud(sp.n) ? audBtn(sp.n, 'Écouter') + audCredit(sp.n) : ''}
+      ${sp.v ? `<p class="ftext">${sp.vt ? `<b>${esc(sp.vt)}.</b> ` : ''}${esc(sp.v)}</p>` : '<p class="muted">Pas encore de description du chant dans ta base.</p>'}
+      ${sp.xc[0] ? `<a class="btn small" target="_blank" rel="noopener" href="${esc(sp.xc[0])}">Ouvrir sur xeno-canto</a>` : ''}`,
+    famille: f.d ? `<h3>${esc(famLabel(f.n))} · ${esc(f.grp || '')}</h3><p class="ftext">${esc(f.d)}</p>${f.sp ? `<p class="muted">${esc(f.sp)}</p>` : ''}${f.ref ? `<p>Espèce de référence : <b>${esc(f.ref)}</b></p>` : ''}` : '<p class="muted">Pas de description de famille.</p>',
+    sosies: sos ? `<p class="ftext">${esc(sos.g.ctx)}</p>${sos.g.pairs.filter(p => p[0] === sp.n || p[1] === sp.n || p[0] === sos.s.n || p[1] === sos.s.n).map(p => `<div class="block"><h4>${esc(p[0])} / ${esc(p[1])} · ${esc(dimLabel(sos.g, p[2]))}</h4><p>${esc(p[3])}</p></div>`).join('')}<button class="btn primary wide" id="tosos">Fiche comparative et jeu</button>` : ''
+  };
+  const phs = photosOf(sp);
+  app().innerHTML = `<div class="fhead"><button class="back" aria-label="Retour">‹</button><div><h1>${esc(sp.n)}</h1>${sp.sci ? `<p><i>${esc(sp.sci)}</i></p>` : ''}</div></div>
+  <div class="fphoto photo-wrap" id="fph"><div class="ph-loading">Chargement de la photo…</div></div>
+  <div class="ftabs">${tabs.map(([k, l]) => `<button class="ftab ${k === cur ? 'on' : ''}" data-tab="${k}">${FTAB_ICONS[k]}<span>${l}</span></button>`).join('')}</div>
+  <div class="fbody">${panes[cur]}</div>`;
+  const backFn = back || guide;
+  app().querySelector('.back').onclick = () => { stopAudio(); backFn(); };
+  app().querySelectorAll('[data-tab]').forEach(b => b.onclick = () => { stopAudio(); fiche(sp, back, b.dataset.tab); });
+  if ($('#tosos')) $('#tosos').onclick = () => sosGroup(sos.g, () => fiche(sp, back, 'sosies'));
+  if (!tab) window.scrollTo(0, 0);
+  await waitPhotos([sp]);
+  const list = photosOf(sp); let pi = 0;
+  const showP = () => { showPhoto($('#fph'), list[pi], sp); if (list.length > 1) { const d = document.createElement('div'); d.className = 'pdots'; d.innerHTML = list.map((_, j) => `<button class="${j === pi ? 'on' : ''}" aria-label="Photo ${j + 1}"></button>`).join(''); $('#fph').appendChild(d); d.querySelectorAll('button').forEach((b, j) => b.onclick = () => { pi = j; showP(); }); } };
+  showP();
+}
+function sosRowsFor(sos) {
+  const g = sos.g, s = sos.s;
+  return `<div class="block"><h4>Critères qui tranchent · ${esc(g.name)}</h4>${g.read.map(k => `<p><b>${esc(dimLabel(g, k))}</b> ${esc(sosVal(s.v[k]))}</p>`).join('')}</div>`;
+}
+
 /* ====== Démarrage ====== */
 (async function init() {
   DB = await (await fetch('data.json')).json();
   DB.sp.forEach(s => { const f = DB.fams.find(x => x.n === s.f) || {}; s.grp = f.grp; s.cat = f.cat; s.xc = s.xc || []; s.d = s.d || ''; s.v = s.v || ''; s.vt = s.vt || ''; s.sci = s.sci || ''; });
   sosInit();
+  try { AUDIO = await (await fetch('audio.json')).json(); } catch (e) { AUDIO = {}; }
   home();
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => { });
   // préchargement discret des photos
