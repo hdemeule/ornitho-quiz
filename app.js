@@ -927,7 +927,7 @@ const FTAB_ICONS = {
   famille: '<svg viewBox="0 0 32 32"><circle cx="16" cy="16" r="12" stroke="currentColor" stroke-width="2.5" fill="none"/><path d="M16 14v9M16 9v2" stroke="currentColor" stroke-width="3"/></svg>',
   sosies: '<svg viewBox="0 0 32 32"><circle cx="11" cy="16" r="7" stroke="currentColor" stroke-width="2.5" fill="none"/><circle cx="21" cy="16" r="7" stroke="currentColor" stroke-width="2.5" fill="none"/></svg>'
 };
-function autoNote(sp) { if (!sp.auto) return ''; const h = u => { try { return new URL(u).hostname.replace('www.', ''); } catch (e) { return u; } }; return `<p class="autonote">Texte ajouté hors de ta base Notion, vérifié sur ${sp.auto.src.map(u => `<a href="${esc(u)}" target="_blank" rel="noopener">${esc(h(u))}</a>`).join(', ')}${sp.auto.conf && sp.auto.conf !== 'haute' ? ' · fiabilité ' + esc(sp.auto.conf) : ''}. À relire avec Le Guide ornitho.</p>`; }
+function autoNote(sp, k) { if (!sp.auto || (sp.auto.f && !sp.auto.f.includes(k))) return ''; const h = u => { try { return new URL(u).hostname.replace('www.', ''); } catch (e) { return u; } }; return `<p class="autonote">Texte ajouté hors de ta base Notion, vérifié sur ${sp.auto.src.map(u => `<a href="${esc(u)}" target="_blank" rel="noopener">${esc(h(u))}</a>`).join(', ')}${sp.auto.conf && sp.auto.conf !== 'haute' ? ' · fiabilité ' + esc(sp.auto.conf) : ''}. À relire avec Le Guide ornitho.</p>`; }
 let FICHE_GO = null;
 async function fiche(sp, back, tab) {
   FICHE_GO = null;
@@ -939,9 +939,9 @@ async function fiche(sp, back, tab) {
     oiseau: `${hasAud(sp.n) ? `<div class="fsound">${audBtn(sp.n, sp.vt ? sp.vt.toLowerCase() : 'écouter', 'flat')}</div>` : ''}
       ${path(sp)}
       ${sp.d && !sp.solo ? `<p class="ftext">${esc(sp.d)}</p>` : '<p class="muted">Pas encore de critères dans ta base Notion pour cette espèce.</p>'}
-      ${sp.d && !sp.solo ? autoNote(sp) : ''}${sos ? sosRowsFor(sos) : ''}`,
+      ${sp.d && !sp.solo ? autoNote(sp, 'd') : ''}${sos ? sosRowsFor(sos) : ''}`,
     voix: `${hasAud(sp.n) ? audBtn(sp.n, 'Écouter') + audCredit(sp.n) : ''}
-      ${sp.v ? `<p class="ftext">${sp.vt ? `<b>${esc(sp.vt)}.</b> ` : ''}${esc(sp.v)}</p>` : '<p class="muted">Pas encore de description du chant dans ta base.</p>'}${sp.v ? autoNote(sp) : ''}
+      ${sp.v ? `<p class="ftext">${sp.vt ? `<b>${esc(sp.vt)}.</b> ` : ''}${esc(sp.v)}</p>` : '<p class="muted">Pas encore de description du chant dans ta base.</p>'}${sp.v ? autoNote(sp, 'v') : ''}
       ${sp.xc[0] ? `<a class="btn small" target="_blank" rel="noopener" href="${esc(sp.xc[0])}">Ouvrir sur xeno-canto</a>` : ''}`,
     famille: f.d ? `<h3>${esc(famLabel(f.n))} · ${esc(f.grp || '')}</h3><p class="ftext">${esc(f.d)}</p>${f.sp ? `<p class="muted">${esc(f.sp)}</p>` : ''}${f.ref ? `<p>Espèce de référence : <b>${esc(f.ref)}</b></p>` : ''}` : '<p class="muted">Pas de description de famille.</p>',
     sosies: sos ? `<p class="ftext">${esc(sos.g.ctx)}</p>${sos.g.pairs.filter(p => p[0] === sp.n || p[1] === sp.n || p[0] === sos.s.n || p[1] === sos.s.n).map(p => `<div class="block"><h4>${esc(p[0])} / ${esc(p[1])} · ${esc(dimLabel(sos.g, p[2]))}</h4><p>${esc(p[3])}</p></div>`).join('')}<button class="btn primary wide" id="tosos">Fiche comparative et jeu</button>` : ''
