@@ -236,6 +236,7 @@ function buildMixed(mix, filter) {
 /* ====== Modes de jeu ====== */
 const MODES = {
   daily: { title: 'Session du jour', icon: '🎯', desc: 'Révision espacée : photos, critères, chants', mix: [[['photo'], 4], [['crit'], 3], [['chant'], 2], [['fam', 'grp', 'famdesc', 'ref', 'intrus', 'sci'], 1]], photos: true },
+  sosies: { title: 'Sosies', icon: '', desc: 'Oiseaux qui se ressemblent : le critère qui tranche', special: 'sosies' },
   photo: { title: 'Qui est-ce ?', icon: '📷', desc: 'Vraies photos, espèces proches en piège', types: ['photo'], n: 10, photos: true },
   crit: { title: 'Critères fins', icon: '🔍', desc: 'Retrouver l\'espèce à partir de tes fiches', types: ['crit'], n: 10 },
   chant: { title: 'À l\'oreille', icon: '🎶', desc: 'Descriptions de chants et cris', types: ['chant'], n: 8 },
@@ -251,6 +252,7 @@ const ICONS = (() => {
   const w = d => `<svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square">${d}</svg>`;
   const r = 'stroke="#e8401c"';
   return {
+    sosies: w(`<circle cx="11" cy="16" r="7"/><circle cx="21" cy="16" r="7" ${r}/>`),
     photo: w(`<rect x="3" y="8" width="26" height="19"/><path d="M11 8l2-4h6l2 4"/><circle cx="16" cy="17" r="5" ${r}/>`),
     crit: w(`<circle cx="13" cy="13" r="8"/><path d="M19 19l9 9" ${r}/>`),
     chant: w(`<path d="M4 16h3M10 10v12M15 6v20M20 11v10M25 14v4" /><path d="M28 16h1" ${r}/>`),
@@ -381,8 +383,10 @@ async function fiche(sp, back) {
   ${path(sp)}
   ${sp.d && !sp.solo ? `<div class="block"><h4>Critères</h4><p>${esc(sp.d)}</p></div>` : ''}
   ${sp.v ? `<div class="block"><h4>Vocalisation${sp.vt ? ' · ' + esc(sp.vt) : ''}</h4><p>${esc(sp.v)}</p>${sp.xc[0] ? `<a class="btn small" target="_blank" rel="noopener" href="${esc(sp.xc[0])}">▶ Écouter sur xeno-canto</a>` : ''}</div>` : ''}
+  ${SOS_INDEX[sp.n] ? `<button class="btn wide" id="tosos">Comparer avec ses sosies (${esc(SOS_INDEX[sp.n].g.name)})</button>` : ''}
   ${f.d ? `<div class="block fam"><h4>Famille ${famLabel(f.n)}</h4><p>${esc(f.d)}</p>${f.sp ? `<p class="muted small">${esc(f.sp)}</p>` : ''}${f.ref ? `<p class="small">Espèce de référence : <b>${esc(f.ref)}</b></p>` : ''}</div>` : ''}`;
   app().querySelector('.back').onclick = back || carnet;
+  if ($('#tosos')) $('#tosos').onclick = () => sosGroup(SOS_INDEX[sp.n].g, () => fiche(sp, back));
   window.scrollTo(0, 0);
   await waitPhotos([sp]);
   showPhoto($('#fph'), photosOf(sp)[0], sp);
@@ -408,6 +412,7 @@ async function fillCredit(el, ph, sp) {
 /* ====== Moteur de quiz ====== */
 async function startMode(k) {
   const m = MODES[k];
+  if (m.special === 'sosies') return sosHome();
   if (m.special === 'blitz') return blitz();
   if (m.special === 'pairs') return pairs();
   if (m.special === 'path') return pathGame();
@@ -455,21 +460,28 @@ function renderQ(q, st, onAnswer, onNext, onQuit, timed) {
     const val = q.opts[+b.dataset.k]; const ok = val === q.answer;
     app().querySelectorAll('.opt').forEach(x => { if (q.opts[+x.dataset.k] === q.answer) x.classList.add('good'); else if (x === b) x.classList.add('bad'); else x.classList.add('dim'); });
     vibrate(ok ? 15 : [30, 40, 30]);
-    onAnswer(ok);
-    feedback(q, ok, onNext, timed);
+    onAnswer(ok, val);
+    feedback(q, ok, onNext, timed, val);
   });
   window.scrollTo(0, 0);
 }
-function feedback(q, ok, onNext, timed) {
+function feedback(q, ok, onNext, timed, chosen) {
   const sp = q.sp;
   const fb = $('#fb');
-  if (timed) { setTimeout(onNext, ok ? 350 : 1100); return; }
+  if (timed && ok) { setTimeout(onNext, 350); return; }
+  if (timed) {
+    fb.innerHTML = `<div class="fbcard ko"><div class="fbh">✗ C'était ${esc(q.answer)}</div>${whyWrong(q, chosen)}<p class="small muted">Chrono en pause.</p><button class="btn primary wide" id="nx">Continuer</button></div>`;
+    $('#nx').onclick = onNext; setTimeout(() => fb.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 50); return;
+  }
   const praise = ok ? pick(['Bien vu !', 'Exact.', 'Parfait.', 'Œil de lynx.', 'Oui !', 'Bonne identification.']) : pick(['Pas tout à fait.', 'Raté, mais retenu.', 'Non.']);
   let body = '';
-  if (q.intrusFam) body = `<p><b>${esc(sp.n)}</b> appartient aux ${famLabel(sp.f)}, pas aux ${famLabel(q.intrusFam)}.</p>`;
+  const why = ok ? '' : whyWrong(q, chosen);
+  if (q.sosie) body = q.explain(chosen, ok);
+  else if (q.intrusFam) body = `<p><b>${esc(sp.n)}</b> appartient aux ${famLabel(sp.f)}, pas aux ${famLabel(q.intrusFam)}.</p>`;
   else if (q.fam) body = `<p><b>${famLabel(q.fam.n)}</b> · ${esc(q.fam.grp)} · ${esc(q.fam.cat)}</p>${q.fam.d && q.id.startsWith('grp') ? '' : ''}${q.fam.ref ? `<p class="small">Espèce de référence : ${esc(q.fam.ref)}</p>` : ''}${q.fam.sp ? `<p class="small muted">${esc(q.fam.sp)}</p>` : ''}`;
   else body = `<p><b>${esc(sp.n)}</b>${sp.sci ? ` <i>${esc(sp.sci)}</i>` : ''}</p>${path(sp)}${sp.d && !sp.solo && !q.id.startsWith('crit') ? `<p class="small">${esc(sp.d)}</p>` : ''}${q.id.startsWith('crit') ? `<p class="small">${esc(sp.d)}</p>` : ''}${q.id.startsWith('chant') && sp.xc[0] ? `<a class="btn small" target="_blank" rel="noopener" href="${esc(sp.xc[0])}">▶ Écouter sur xeno-canto</a>` : ''}`;
   fb.innerHTML = `<div class="fbcard ${ok ? 'ok' : 'ko'}"><div class="fbh">${ok ? '✓' : '✗'} ${praise}</div>
+    ${why}
     ${q.kind !== 'photo' && !q.fam && !q.intrusFam ? `<div class="photo-wrap small" id="fbph"></div>` : ''}
     ${body}
     <button class="btn primary wide" id="nx">Continuer</button></div>`;
@@ -503,19 +515,20 @@ function endQuiz(cfg, score, total, xp, missed) {
 async function blitz() {
   await loadingScreen('Je cherche les photos…'); await waitPhotos(SPECIES());
   const types = ['photo', 'photo', 'photo', 'crit', 'crit', 'chant', 'fam'];
-  let end = Date.now() + 60000, score = 0, combo = 0, xp = 0, total = 0, timer;
+  let end = Date.now() + 60000, score = 0, combo = 0, xp = 0, total = 0, timer, paused = null;
   const next = () => {
+    if (paused) { end += Date.now() - paused; paused = null; }
     if (Date.now() >= end) return finish();
     const sp = pick(SPECIES()); const t = pick(types.filter(t => QTYPES[t].ok(sp)));
     const q = QTYPES[t].make(sp); total++;
     const bar = `<div class="timer"><i id="tbar"></i><span id="tsec"></span><b>${score} pts</b></div>`;
     renderQ(q, { idx: total - 1, total: total, title: 'Blitz', combo }, ok => {
       if (ok) { combo++; const pts = Math.min(combo, 5); score += pts; xp += 3 + pts; S.correct++; }
-      else { combo = 0; end -= 3000; }
+      else { combo = 0; end -= 3000; paused = Date.now(); }
       grade(q.id, ok); S.answered++;
     }, next, () => { clearInterval(timer); home(); }, bar);
   };
-  const tick = () => { const left = Math.max(0, end - Date.now()); const b = $('#tbar'), s = $('#tsec'); if (b) b.style.width = (left / 600) + '%'; if (s) s.textContent = Math.ceil(left / 1000) + ' s'; if (left <= 0) { clearInterval(timer); finish(); } };
+  const tick = () => { if (paused) return; const left = Math.max(0, end - Date.now()); const b = $('#tbar'), s = $('#tsec'); if (b) b.style.width = (left / 600) + '%'; if (s) s.textContent = Math.ceil(left / 1000) + ' s'; if (left <= 0) { clearInterval(timer); finish(); } };
   let finished = false;
   const finish = () => {
     if (finished) return; finished = true; clearInterval(timer); addXP(xp);
@@ -546,7 +559,7 @@ function pairs() {
     if (sel === b) { b.classList.remove('sel'); sel = null; return; }
     const c0 = cards[+sel.dataset.k];
     if (c0.i === c.i && c0.kind !== c.kind) { [sel, b].forEach(x => { x.classList.remove('sel'); x.classList.add('found'); }); found++; vibrate(15); grade((variant === 'fam' ? 'fam:' : 'sci:') + chosen[c.i].n, true); }
-    else { errors++; $('#err').textContent = errors + ' erreur' + (errors > 1 ? 's' : ''); [sel, b].forEach(x => x.classList.add('shake')); const a = sel; setTimeout(() => { a.classList.remove('sel', 'shake'); b.classList.remove('shake'); }, 450); vibrate([30, 40, 30]); }
+    else { const spc = [c0, c].find(x => x.kind === 'sp'); if (spc && c0.kind !== c.kind) { const S0 = chosen[spc.i]; toast(variant === 'fam' ? `${S0.n} : ${famLabel(S0.f)}` : `${S0.n} : ${S0.sci}`); } errors++; $('#err').textContent = errors + ' erreur' + (errors > 1 ? 's' : ''); [sel, b].forEach(x => x.classList.add('shake')); const a = sel; setTimeout(() => { a.classList.remove('sel', 'shake'); b.classList.remove('shake'); }, 450); vibrate([30, 40, 30]); }
     sel = null;
     if (found === 6) {
       const sec = Math.round((Date.now() - t0) / 1000); const xp = Math.max(20, 70 - errors * 8 - Math.floor(sec / 6));
@@ -593,7 +606,9 @@ async function pathGame() {
         if (ok) { pts += (k + 1) * 3; k++; if (k < 4) return setTimeout(step, 450); grade('id:' + sp.n, true); grade('fam:' + sp.n, true); }
         else { if (k >= 2) grade(k === 2 ? 'fam:' + sp.n : 'id:' + sp.n, false); }
         const fb = $('#fb');
-        fb.innerHTML = `<div class="fbcard ${ok ? 'ok' : 'ko'}"><div class="fbh">${ok ? '✓ Chemin complet' : `✗ Arrêt à l'étage ${k + 1}`}</div><p><b>${esc(sp.n)}</b>${sp.sci ? ` <i>${esc(sp.sci)}</i>` : ''}</p>${path(sp)}<button class="btn primary wide" id="nx">Continuer</button></div>`;
+        const chosenP = s.opts[+b.dataset.j]; const F = DB.fams.find(f => f.n === sp.f);
+        const whyP = ok ? '' : k === 0 ? `<p class="why">${esc(sp.n)} est un <b>${esc(sp.cat)}</b>, pas un ${esc(chosenP)}.</p>` : whyWrong({ id: ['', 'grp', 'fam', 'id'][k] + ':x', sp, fam: F, answer: s.a }, chosenP);
+        fb.innerHTML = `<div class="fbcard ${ok ? 'ok' : 'ko'}"><div class="fbh">${ok ? '✓ Chemin complet' : `✗ Arrêt à l'étage ${k + 1}`}</div>${whyP}<p><b>${esc(sp.n)}</b>${sp.sci ? ` <i>${esc(sp.sci)}</i>` : ''}</p>${path(sp)}<button class="btn primary wide" id="nx">Continuer</button></div>`;
         fillCredit($('#qph'), ph, sp);
         $('#nx').onclick = () => { round++; play(); };
       });
@@ -644,10 +659,201 @@ function settings() {
   $('#rz').onclick = () => { if (confirm('Effacer définitivement XP, étoiles et révisions ?')) { localStorage.removeItem(KEY); S = load(); home(); } };
 }
 
+/* ====== Pourquoi c'est faux ====== */
+const shortTxt = (t, n = 190) => { t = t || ''; if (t.length <= n) return t; const cut = t.slice(0, n); const p = Math.max(cut.lastIndexOf('. '), cut.lastIndexOf('; ')); return (p > 60 ? cut.slice(0, p + 1) : cut.replace(/\s+\S*$/, '') + '…'); };
+const famByLabel = l => DB.fams.find(f => famLabel(f.n) === l);
+function twoCol(a, ta, b, tb) {
+  if (!ta && !tb) return '';
+  return `<div class="duo">${ta ? `<div class="w"><small>Ton choix · ${esc(a)}</small>${esc(shortTxt(ta))}</div>` : ''}${tb ? `<div class="r"><small>Bonne réponse · ${esc(b)}</small>${esc(shortTxt(tb))}</div>` : ''}</div>`;
+}
+function whyWrong(q, chosen) {
+  if (!chosen || chosen === q.answer) return '';
+  const id = q.id.split(':')[0];
+  const head = `<p class="why">Tu as choisi <b>${esc(chosen)}</b>, mais c'est <b>${esc(q.answer)}</b>.</p>`;
+  const r = q.sp;
+  if (q.sosie) return '';
+  if (id === 'intrus') {
+    return `<p class="why"><b>${esc(chosen)}</b> fait bien partie des ${famLabel(q.intrusFam)}. L'intrus est <b>${esc(r.n)}</b>, qui fait partie des ${famLabel(r.f)} (groupe ${esc(r.grp)}).</p>`;
+  }
+  if (id === 'sci') {
+    const c = DB.sp.find(s => s.sci === chosen);
+    const g1 = chosen.split(' ')[0], g2 = (q.answer || '').split(' ')[0];
+    return `<p class="why"><i>${esc(chosen)}</i>, c'est ${c ? `le nom de <b>${esc(c.n)}</b>` : 'une autre espèce'}. ${esc(r.n)} se dit <i>${esc(q.answer)}</i>.${g1 === g2 ? ` Même genre <i>${esc(g1)}</i> : c'est le second mot qu'il faut retenir.` : ''}</p>`;
+  }
+  if (id === 'fam' || id === 'famdesc') {
+    const cf = famByLabel(chosen), rf = q.fam || DB.fams.find(f => f.n === r.f);
+    const lead = id === 'fam' ? `<p class="why">${esc(r.n)} fait partie des <b>${famLabel(rf.n)}</b>, pas des ${esc(chosen)}.</p>` : head;
+    return lead + twoCol(chosen + (cf && cf.grp ? ` (${cf.grp})` : ''), cf && cf.d, famLabel(rf.n) + (rf.grp ? ` (${rf.grp})` : ''), rf.d);
+  }
+  if (id === 'grp') {
+    const rf = q.fam || DB.fams.find(f => f.n === r.f);
+    const inG = DB.fams.filter(f => f.grp === chosen).map(f => famLabel(f.n)).slice(0, 6);
+    return `<p class="why">Les ${famLabel(rf.n)} sont des <b>${esc(rf.grp)}</b>.${inG.length ? ` Le groupe « ${esc(chosen)} » réunit plutôt : ${inG.join(', ')}.` : ''}</p>`;
+  }
+  if (id === 'ref') {
+    const cf = DB.fams.find(f => f.ref === chosen);
+    return `<p class="why"><b>${esc(chosen)}</b> est l'espèce de référence ${cf ? `des ${famLabel(cf.n)}` : 'd\'une autre famille'}. Pour les ${famLabel(q.fam.n)}, c'est ${esc(q.answer)}.</p>`;
+  }
+  // réponses qui sont des noms d'espèces : photo, critères, chant
+  const c = DB.sp.find(s => s.n === chosen);
+  const sc = SOS_INDEX[chosen], sr = SOS_INDEX[r.n];
+  if (sc && sr && sc.g === sr.g) return head + sosCompare(sc.g, sc.s, sr.s);
+  if (!c) return head;
+  let t = head;
+  t += c.f !== r.f ? `<p>${esc(c.n)} fait partie des ${famLabel(c.f)} (${esc(c.grp)}), la bonne réponse des ${famLabel(r.f)} (${esc(r.grp)}).</p>` : `<p>Même famille (${famLabel(c.f)}) : la différence est dans les critères fins.</p>`;
+  t += id === 'chant' ? twoCol(c.n, c.v, r.n, r.v) : twoCol(c.n, c.d, r.n, r.d);
+  return t;
+}
+
+/* ====== Sosies ====== */
+const sosVal = v => Array.isArray(v) ? v[0] : (v || '');
+const sosKey = v => Array.isArray(v) ? v[1] : (v || '');
+const SOS_INDEX = {};
+function sosInit() { SOSIES.forEach(g => g.sp.forEach(s => { [s.n, s.w].forEach(k => { if (k && !SOS_INDEX[k]) SOS_INDEX[k] = { g, s }; }); })); }
+const dimLabel = (g, k) => (g.dims.find(d => d[0] === k) || [k, k])[1];
+const sosPair = (g, a, b) => g.pairs.find(p => (p[0] === a && p[1] === b) || (p[0] === b && p[1] === a));
+const sosSp = (g, n) => g.sp.find(s => s.n === n);
+const sosPh = s => ({ n: s.w || s.n, sci: s.sci });
+const readRank = (g, k) => { const i = g.read.indexOf(k); return i < 0 ? 9 : i; };
+function sosTable(g, A, B, keys, la, lb, keyFirst) {
+  const rows = keys.map((k, i) => `<tr class="${keyFirst && i === 0 ? 'key' : ''}"><th>${esc(dimLabel(g, k))}${keyFirst && i === 0 ? '<small>ce qui tranche</small>' : ''}</th><td class="w">${esc(sosVal(A.v[k]))}</td><td class="r">${esc(sosVal(B.v[k]))}</td></tr>`).join('');
+  return `<div class="cmpwrap"><table class="cmp"><thead><tr><th></th><th class="w">${esc(A.n)}${la ? `<small>${la}</small>` : ''}</th><th class="r">${esc(B.n)}${lb ? `<small>${lb}</small>` : ''}</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+}
+function sosCompare(g, wrong, right, focus) {
+  const p = sosPair(g, wrong.n, right.n);
+  const key = focus || (p && p[2]) || g.read.find(k => sosKey(wrong.v[k]) !== sosKey(right.v[k])) || g.read[0];
+  const others = g.dims.map(d => d[0]).filter(k => k !== key && sosKey(wrong.v[k]) !== sosKey(right.v[k])).sort((a, b) => readRank(g, a) - readRank(g, b)).slice(0, 2);
+  return sosTable(g, wrong, right, [key, ...others], 'ton choix', 'la bonne réponse', true) + (p ? `<p class="retiens"><b>À retenir</b>${esc(p[3])}</p>` : '');
+}
+const SOS_TRAP = 'La teinte générale du plumage';
+function sosReflex(g) {
+  const p = pick(g.pairs); const key = p[2]; const lab = dimLabel(g, key);
+  const others = shuffle(g.dims.map(d => d[0]).filter(k => k !== key)).slice(0, 2).map(k => dimLabel(g, k));
+  const A = sosSp(g, p[0]), B = sosSp(g, p[1]);
+  return {
+    id: `sos:${g.id}:r:${g.pairs.indexOf(p)}`, sosie: true, kind: 'text', sp: sosPh(B),
+    prompt: `${p[0]} ou ${p[1]} : que regardes-tu en premier ?`, hint: g.name,
+    opts: shuffle([lab, SOS_TRAP, ...others]), answer: lab,
+    explain(ch, ok) {
+      let t = '';
+      if (!ok && ch === SOS_TRAP) t += `<p class="why">La couleur trompe : la lumière, l'usure et l'âge la changent. Regarde d'abord <b>${esc(lab.toLowerCase())}</b>.</p>`;
+      else if (!ok) t += `<p class="why">${esc(ch)} peut aider ensuite, mais ce qui tranche d'abord, c'est <b>${esc(lab.toLowerCase())}</b>.</p>`;
+      const ck = g.dims.find(d => d[1] === ch); const keys = [key]; if (!ok && ck && ck[0] !== key) keys.push(ck[0]);
+      return t + sosTable(g, A, B, keys, '', '', true) + `<p class="retiens"><b>À retenir</b>${esc(p[3])}</p>`;
+    }
+  };
+}
+function sosDuel(g) {
+  const p = pick(g.pairs); const key = p[2];
+  const [A, B] = shuffle([sosSp(g, p[0]), sosSp(g, p[1])]);
+  return {
+    id: `sos:${g.id}:d:${g.pairs.indexOf(p)}`, sosie: true, kind: 'text', sp: sosPh(A),
+    prompt: `Lequel a : ${sosVal(A.v[key]).toLowerCase()} ?`, hint: `${g.name} · ${dimLabel(g, key)}`,
+    opts: shuffle([A.n, B.n]), answer: A.n,
+    explain(ch, ok) {
+      const t = ok ? '' : `<p class="why">Tu as choisi <b>${esc(B.n)}</b>, mais lui a : ${esc(sosVal(B.v[key]).toLowerCase())}.</p>`;
+      return t + sosTable(g, A, B, [key], ok ? '' : 'la bonne réponse', ok ? '' : 'ton choix', true) + `<p class="retiens"><b>À retenir</b>${esc(p[3])}</p>`;
+    }
+  };
+}
+async function sosRun(groups, title, gidForBest) {
+  await loadingScreen('Je prépare les sosies…');
+  await waitPhotos(groups.flatMap(g => g.sp.map(sosPh)));
+  const items = [];
+  for (let i = 0; i < 8; i++) {
+    const g = pick(groups); const t = [0, 1, 2, 0, 1, 2, 1, 2][i];
+    items.push(t === 2 ? { clue: true, g, s: pick(g.sp) } : { q: t === 0 ? sosReflex(g) : sosDuel(g) });
+  }
+  const its = shuffle(items);
+  let i = 0, score = 0, xp = 0; const missed = [];
+  const next = () => {
+    if (i >= its.length) return sosEnd(title, score, its.length, xp, gidForBest, () => sosRun(groups, title, gidForBest));
+    const it = its[i]; const st = { idx: i, total: its.length, combo: 0 };
+    const done = (ok, gain) => { if (ok) { score++; S.correct++; } S.answered++; xp += gain; addXP(gain); S.todayCount = (S.todayDate === today() ? S.todayCount : 0) + 1; S.todayDate = today(); save(); };
+    const go = () => { i++; next(); };
+    if (it.clue) return sosClue(it.g, it.s, st, done, go);
+    renderQ(it.q, st, ok => { grade(it.q.id, ok); done(ok, ok ? 12 : 1); }, go, () => home());
+  };
+  next();
+}
+function sosClue(g, s, st, done, go) {
+  let n = 1; const max = g.dims.length; let answered = false;
+  const opts = shuffle(g.sp.map(x => x.n));
+  const draw = () => {
+    const pts = max - n + 1;
+    app().innerHTML = `<div class="qtop"><button class="back" aria-label="Quitter">✕</button><div class="ladder">${g.dims.map((_, j) => `<i class="${j < n ? 'on' : ''}"></i>`).join('')}</div><span class="combo ghost">${st.idx + 1}/${st.total}</span></div>
+    <div class="q"><p class="hint">${esc(g.name)} · indice par indice</p><p class="prompt">Qui est-ce ?</p>
+    <div class="clues">${g.dims.slice(0, n).map(d => `<div class="clue"><small>${esc(d[1])}</small>${esc(sosVal(s.v[d[0]]))}</div>`).join('')}</div>
+    ${n < max && !answered ? `<button class="btn wide" id="more">Indice suivant · ${pts - 1} pt${pts - 1 > 1 ? 's' : ''} si tu trouves</button>` : ''}
+    <p class="small muted">${answered ? '' : `Réponds maintenant : ${pts} point${pts > 1 ? 's' : ''}.`}</p>
+    <div class="opts">${opts.map((o, k) => `<button class="opt" data-k="${k}">${esc(o)}</button>`).join('')}</div><div id="fb"></div></div>`;
+    app().querySelector('.back').onclick = home;
+    if ($('#more')) $('#more').onclick = () => { n++; draw(); };
+    app().querySelectorAll('.opt').forEach(b => b.onclick = () => {
+      if (answered) return; answered = true;
+      const ch = opts[+b.dataset.k]; const ok = ch === s.n;
+      app().querySelectorAll('.opt').forEach(x => { const v = opts[+x.dataset.k]; if (v === s.n) x.classList.add('good'); else if (x === b) x.classList.add('bad'); else x.classList.add('dim'); });
+      if ($('#more')) $('#more').remove();
+      vibrate(ok ? 15 : [30, 40, 30]);
+      grade(`sos:${g.id}:c:${s.n}`, ok); done(ok, ok ? pts * 3 : 1);
+      const c = sosSp(g, ch);
+      $('#fb').innerHTML = `<div class="fbcard ${ok ? 'ok' : 'ko'}"><div class="fbh">${ok ? `✓ Trouvé avec ${n} indice${n > 1 ? 's' : ''}` : '✗ Pas cette fois'}</div>
+        ${ok ? `<p><b>${esc(s.n)}</b> <i>${esc(s.sci)}</i></p>` : `<p class="why">Tu as choisi <b>${esc(ch)}</b>, mais c'est <b>${esc(s.n)}</b>.</p>${sosCompare(g, c, s)}`}
+        <div class="photo-wrap small" id="fbph"></div>
+        <button class="btn primary wide" id="nx">Continuer</button></div>`;
+      waitPhotos([sosPh(s)]).then(() => showPhoto($('#fbph'), photosOf(sosPh(s))[0], sosPh(s)));
+      $('#nx').onclick = go;
+      setTimeout(() => $('#fb').scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 50);
+    });
+  };
+  draw();
+}
+function sosEnd(title, score, total, xp, gid, again) {
+  const pct = Math.round(score / total * 100);
+  S.sos = S.sos || {};
+  if (gid && (!S.sos[gid] || pct > S.sos[gid])) S.sos[gid] = pct;
+  checkBadges({ endSession: true, perfect: score === total }); save();
+  app().innerHTML = `<div class="end"><div class="big">${esc(title)}</div><h1>${score} / ${total}</h1><p class="muted">+${xp} XP</p>
+  <p class="small muted">Relis la fiche comparative pour ancrer les critères qui tranchent.</p>
+  <div class="row2"><button class="btn" id="home">Sosies</button><button class="btn primary" id="again">Rejouer</button></div></div>`;
+  $('#home').onclick = sosHome; $('#again').onclick = again;
+}
+function sosHome() {
+  S.sos = S.sos || {};
+  app().innerHTML = `<div class="top"><button class="back">‹</button><h1>Sosies</h1></div>
+  <p class="muted">Des oiseaux qui se ressemblent, et le critère qui les sépare. Trois épreuves : le bon réflexe (que regarder d'abord), le duel (lequel a ce critère) et l'indice par indice.</p>
+  <button class="btn primary wide" id="all">Tout mélanger</button>
+  <h2>Les groupes</h2>
+  <div class="chapters">${SOSIES.map((g, i) => `<button class="chap" data-g="${i}"><span>${esc(g.name)}</span><span class="stars">${S.sos[g.id] != null ? S.sos[g.id] + ' %' : ''}</span><small>${esc(g.sub)} · ${g.sp.length} espèces</small></button>`).join('')}</div>`;
+  app().querySelector('.back').onclick = home;
+  $('#all').onclick = () => sosRun(SOSIES, 'Sosies', null);
+  app().querySelectorAll('[data-g]').forEach(b => b.onclick = () => sosGroup(SOSIES[+b.dataset.g]));
+  window.scrollTo(0, 0);
+}
+async function sosGroup(g, back) {
+  const order = [...g.dims].sort((a, b) => readRank(g, a[0]) - readRank(g, b[0]));
+  app().innerHTML = `<div class="top"><button class="back">‹</button><h1>${esc(g.name)}</h1></div>
+  <p class="muted">${esc(g.ctx)}</p>
+  <div class="readorder"><small>Ordre de lecture</small>${g.read.map((k, i) => `<span><b>${i + 1}</b>${esc(dimLabel(g, k))}</span>`).join('')}</div>
+  <button class="btn primary wide" id="play">Jouer ce groupe</button>
+  <h2>Les duels classiques</h2>
+  <div class="duels">${g.pairs.map(p => `<div class="block"><h4>${esc(p[0])} / ${esc(p[1])} · ${esc(dimLabel(g, p[2]))}</h4><p>${esc(p[3])}</p></div>`).join('')}</div>
+  <h2>Fiche comparative</h2>
+  <div class="sosph">${g.sp.map((s, i) => `<figure><div class="photo-wrap small" id="sph${i}"></div><figcaption>${esc(s.n)}</figcaption></figure>`).join('')}</div>
+  ${order.map(d => `<div class="block dimblock"><h4>${readRank(g, d[0]) < 9 ? `${readRank(g, d[0]) + 1}. ` : ''}${esc(d[1])}</h4>${g.sp.map(s => `<p><b>${esc(s.n)}</b> ${esc(sosVal(s.v[d[0]]))}</p>`).join('')}</div>`).join('')}
+  <p class="small muted">Critères alignés sur Le Guide ornitho : ouvre la planche du groupe pour les voir dessinés.</p>`;
+  app().querySelector('.back').onclick = back || sosHome;
+  $('#play').onclick = () => sosRun([g], g.name, g.id);
+  window.scrollTo(0, 0);
+  await waitPhotos(g.sp.map(sosPh));
+  g.sp.forEach((s, i) => { const el = $('#sph' + i); if (el) showPhoto(el, photosOf(sosPh(s))[0], sosPh(s), true); });
+}
+
 /* ====== Démarrage ====== */
 (async function init() {
   DB = await (await fetch('data.json')).json();
   DB.sp.forEach(s => { const f = DB.fams.find(x => x.n === s.f) || {}; s.grp = f.grp; s.cat = f.cat; s.xc = s.xc || []; s.d = s.d || ''; s.v = s.v || ''; s.vt = s.vt || ''; s.sci = s.sci || ''; });
+  sosInit();
   home();
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => { });
   // préchargement discret des photos
