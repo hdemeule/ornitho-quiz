@@ -328,7 +328,7 @@ function training() {
   const dueN = Object.values(S.cards).filter(c => c.due <= t).length;
   const groups = chapters();
   app().innerHTML = `
-  <div class="top"><h1>Entraînement</h1></div>
+  ${appTop()}<div class="top"><h1>Entraînement</h1></div>
   <section class="goal">
     <div class="ring" style="--p:${goalPct}"><span>${done}/${S.goal}</span></div>
     <div><b>Objectif du jour</b><br><span class="muted">${dueN} révision${dueN > 1 ? 's' : ''} en attente</span></div>
@@ -909,7 +909,7 @@ function guideFams() {
 }
 function guide() {
   const groups = [...new Set(guideFams().map(f => f.grp).filter(Boolean))];
-  app().innerHTML = `<div class="gbar"><button class="back" aria-label="Retour">‹</button><input class="search" id="gq" type="search" placeholder="Recherche…" value="${esc(GUIDE.q)}" autocomplete="off"><button class="gfilter ${GUIDE.grp ? 'on' : ''}" id="gf" aria-label="Filtrer"><i></i><i></i><i></i></button></div>
+  app().innerHTML = `${appTop()}<div class="gbar"><button class="back" aria-label="Retour">‹</button><input class="search" id="gq" type="search" placeholder="Recherche…" value="${esc(GUIDE.q)}" autocomplete="off"><button class="gfilter ${GUIDE.grp ? 'on' : ''}" id="gf" aria-label="Filtrer"><i></i><i></i><i></i></button></div>
   <div class="gchips" id="gchips" ${GUIDE.showF ? '' : 'hidden'}><button class="chip ${!GUIDE.grp ? 'on' : ''}" data-grp="">Tous</button>${groups.map(g => `<button class="chip ${GUIDE.grp === g ? 'on' : ''}" data-grp="${esc(g)}">${esc(g)}</button>`).join('')}</div>
   <div id="glist"></div>${navBar('guide')}`;
   app().querySelector('.back').onclick = home;
@@ -1053,6 +1053,7 @@ function migrateStars() {
   save();
 }
 
+const appTop = () => `<header class="pbar apptop"><span class="wordmark">Ornitho<em>Quiz</em></span></header>`;
 /* Barre d'onglets */
 function navBar(cur) {
   const it = [['chemin', 'Chemin', '<path d="M8 28c0-6 16-6 16-12S8 10 8 4" stroke="currentColor" stroke-width="2.5" fill="none"/><circle cx="8" cy="28" r="2.5" fill="currentColor"/><circle cx="8" cy="4" r="2.5" fill="currentColor"/>'],
@@ -1283,7 +1284,7 @@ function lessonEnd(L, r) {
 function profile() {
   const r = rank(); const pct = r.to ? Math.round((S.xp - r.from) / (r.to - r.from) * 100) : 100;
   const nd = Object.values(P().done).filter(Boolean).length, ng = Object.values(P().done).filter(v => v === 2).length;
-  app().innerHTML = `<div class="top"><h1>Profil</h1></div>
+  app().innerHTML = `${appTop()}<div class="top"><h1>Profil</h1></div>
   <div class="phero"><div class="rsub">Niveau ${r.lvl} · ${S.xp.toLocaleString('fr-BE')} XP</div><div class="rank"><span class="rname">${esc(r.name)}</span></div><div class="bar"><i style="width:${pct}%"></i></div><div class="rnext">${r.to ? `${(r.to - S.xp).toLocaleString('fr-BE')} XP avant « ${esc(r.next)} »` : 'Rang maximum'}</div></div>
   <div class="lstats"><div><small>Série</small><b>${S.streak || 0} j</b></div><div><small>Leçons</small><b>${nd}</b></div><div><small>Dorées</small><b>${ng}</b></div><div><small>Réussite</small><b>${S.answered ? Math.round(S.correct / S.answered * 100) : 0} %</b></div></div>
   <h2>Badges</h2><div class="badges">${BADGES.map(([id, ic, n, d]) => `<div class="badge ${S.badges.includes(id) ? 'on' : ''}"><span>${ic}</span><b>${n}</b><small>${d}</small></div>`).join('')}</div>
@@ -1395,7 +1396,7 @@ document.addEventListener('keydown', e => {
     if (b && !(history.state && history.state.sub)) { pushing = true; history.pushState({ sub: 1 }, ''); pushing = false; }
     const h = document.querySelector('#app h1');
     const t = document.querySelector('#app .ltop') ? 'Leçon' : document.querySelector('#app .gbar') ? 'Guide' : document.querySelector('#app .trail') ? 'Chemin' : h ? h.textContent.trim() : '';
-    document.title = t && !/^ornitho/i.test(t) ? `${t.charAt(0) + t.slice(1).toLowerCase()} · Ornitho Quiz` : 'Ornitho Quiz';
+    document.title = t && !/^ornitho/i.test(t) ? `${t.charAt(0) + t.slice(1).toLowerCase()} · OrnithoQuiz` : 'OrnithoQuiz';
   };
   new MutationObserver(() => { clearTimeout(sync.t); sync.t = setTimeout(sync, 60); }).observe(document.getElementById('app'), { childList: true });
   addEventListener('popstate', () => {
