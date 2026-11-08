@@ -295,6 +295,7 @@ const BADGES = [
   ['allstars', '🌟', 'Chapitres', '3 étoiles sur 5 chapitres', s => Object.values(S.stars).filter(v => v >= 3).length >= 5]
 ];
 function checkBadges(ctx) {
+  if (ctx && ctx.endSession) syncSoon();
   S.sessions = (S.sessions || 0) + (ctx.endSession ? 1 : 0);
   const c = Object.assign({ sessions: S.sessions }, ctx);
   BADGES.forEach(([id, ic, name, , test]) => { if (!S.badges.includes(id) && test(c)) { S.badges.push(id); setTimeout(() => toast(`${ic} Badge : ${name}`, true), 900); } });
@@ -1225,10 +1226,83 @@ function profile() {
   <div class="hero"><div class="rsub">Niveau ${r.lvl} · ${S.xp.toLocaleString('fr-BE')} XP</div><div class="rank"><span class="rname">${esc(r.name)}</span></div><div class="bar"><i style="width:${pct}%"></i></div><div class="rnext">${r.to ? `${(r.to - S.xp).toLocaleString('fr-BE')} XP avant « ${esc(r.next)} »` : 'Rang maximum'}</div></div>
   <div class="lstats"><div><small>Série</small><b>${S.streak || 0} j</b></div><div><small>Leçons</small><b>${nd}</b></div><div><small>Dorées</small><b>${ng}</b></div><div><small>Réussite</small><b>${S.answered ? Math.round(S.correct / S.answered * 100) : 0} %</b></div></div>
   <h2>Badges</h2><div class="badges">${BADGES.map(([id, ic, n, d]) => `<div class="badge ${S.badges.includes(id) ? 'on' : ''}"><span>${ic}</span><b>${n}</b><small>${d}</small></div>`).join('')}</div>
+  <h2>Mes appareils</h2>${syncBlock()}
   <h2>Réglages</h2><button class="btn wide" id="set">Objectif, photos, sauvegarde</button>
   <p class="foot muted small">${DB.sp.length} espèces et ${DB.fams.length} familles issues de ta base Notion (synchro du ${esc(DB.synced)}). Photos et sons : Wikipédia, Wikimedia Commons, xeno-canto.</p>${navBar('profil')}`;
-  bindNav(); $('#set').onclick = settings; window.scrollTo(0, 0);
+  bindNav(); $('#set').onclick = settings; bindSync(profile); window.scrollTo(0, 0);
 }
+
+/* ====== Synchronisation entre appareils ====== */
+const SKEY = 'ornitho-sync-v1';
+let SYNC = {}; try { SYNC = JSON.parse(localStorage.getItem(SKEY)) || {}; } catch (e) { }
+const saveSync = () => { try { localStorage.setItem(SKEY, JSON.stringify(SYNC)); } catch (e) { } };
+async function syncHash(code) {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode('ornitho-quiz:' + code.trim().toLowerCase()));
+  return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, '0')).join('');
+}
+function mergeState(a, b) {
+  const m = Object.assign({}, b, a);
+  ['xp', 'correct', 'answered', 'sessions'].forEach(k => m[k] = Math.max(a[k] || 0, b[k] || 0));
+  if ((b.lastDay || '') > (a.lastDay || '')) { m.lastDay = b.lastDay; m.streak = b.streak; } else if (b.lastDay === a.lastDay) m.streak = Math.max(a.streak || 0, b.streak || 0);
+  if ((b.todayDate || '') > (a.todayDate || '')) { m.todayDate = b.todayDate; m.todayCount = b.todayCount; } else if (b.todayDate === a.todayDate) m.todayCount = Math.max(a.todayCount || 0, b.todayCount || 0);
+  m.cards = Object.assign({}, b.cards || {});
+  Object.entries(a.cards || {}).forEach(([id, c]) => { const o = m.cards[id]; if (!o || (c.n || 0) >= (o.n || 0)) m.cards[id] = c; });
+  const maxMap = (x, y) => { const r = Object.assign({}, y || {}); Object.entries(x || {}).forEach(([k, v]) => { r[k] = Math.max(v || 0, r[k] || 0); }); return r; };
+  m.stars = maxMap(a.stars, b.stars); m.sos = maxMap(a.sos, b.sos);
+  m.best = Object.assign({}, b.best || {});
+  Object.entries(a.best || {}).forEach(([k, v]) => { const o = m.best[k]; if (o == null) { m.best[k] = v; return; } const va = parseInt(v), vb = parseInt(o); m.best[k] = (k === 'pairs' ? va < vb : va > vb) ? v : o; });
+  m.badges = [...new Set([...(a.badges || []), ...(b.badges || [])])];
+  m.badPhotos = [...new Set([...(a.badPhotos || []), ...(b.badPhotos || [])])];
+  m.path = { done: maxMap((a.path || {}).done, (b.path || {}).done), migrated: !!((a.path || {}).migrated || (b.path || {}).migrated) };
+  m.goal = a.goal || b.goal;
+  return m;
+}
+let syncing = null;
+async function syncNow() {
+  if (!SYNC.k) return { ok: false, why: 'off' };
+  if (syncing) return syncing;
+  syncing = (async () => {
+    try {
+      const url = 'api/progress?k=' + SYNC.k;
+      const r = await fetch(url, { cache: 'no-store' });
+      if (r.status === 503) return { ok: false, why: 'server' };
+      if (r.ok) { const remote = await r.json(); S = mergeState(S, remote); save(); }
+      else if (r.status !== 404) return { ok: false, why: 'net' };
+      const w = await fetch(url, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(S) });
+      if (!w.ok) return { ok: false, why: w.status === 503 ? 'server' : 'net' };
+      SYNC.at = Date.now(); saveSync();
+      return { ok: true };
+    } catch (e) { return { ok: false, why: 'net' }; }
+    finally { setTimeout(() => { syncing = null; }, 0); }
+  })();
+  return syncing;
+}
+let syncTimer = null;
+function syncSoon() { if (!SYNC.k) return; clearTimeout(syncTimer); syncTimer = setTimeout(() => syncNow(), 1500); }
+const syncWhy = w => ({ server: 'La synchronisation n\'est pas encore branchée sur le serveur.', net: 'Pas de connexion : ta progression partira plus tard.', off: '' })[w] || '';
+function syncBlock() {
+  if (!SYNC.k) return `<div class="block"><h4>Synchronisation entre appareils</h4>
+    <p class="small">Choisis un code et tape le même sur ton téléphone et ton PC. Ta progression sera alors commune. Au moins 6 caractères, et pas un mot de passe important.</p>
+    <input class="search" id="scode" type="text" autocomplete="off" autocapitalize="off" placeholder="Ton code, ex. martinet-1970">
+    <button class="btn primary wide" id="son">Activer la synchronisation</button></div>`;
+  const at = SYNC.at ? new Date(SYNC.at).toLocaleString('fr-BE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : 'jamais';
+  return `<div class="block"><h4>Synchronisation entre appareils</h4><p class="small">Activée sur cet appareil. Dernière synchro : <b id="sat">${esc(at)}</b>.</p>
+    <div class="row2"><button class="btn" id="snow">Synchroniser</button><button class="btn" id="soff">Désactiver ici</button></div></div>`;
+}
+function bindSync(rerender) {
+  if ($('#son')) $('#son').onclick = async () => {
+    const c = ($('#scode').value || '').trim();
+    if (c.length < 6) { toast('Au moins 6 caractères'); return; }
+    SYNC = { k: await syncHash(c) }; saveSync();
+    const r = await syncNow();
+    toast(r.ok ? 'Synchronisation activée' : syncWhy(r.why)); rerender();
+  };
+  if ($('#snow')) $('#snow').onclick = async () => { const r = await syncNow(); toast(r.ok ? 'Synchronisé' : syncWhy(r.why)); rerender(); };
+  if ($('#soff')) $('#soff').onclick = () => { SYNC = {}; saveSync(); toast('Synchronisation désactivée sur cet appareil'); rerender(); };
+}
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && SYNC.k && (!SYNC.at || Date.now() - SYNC.at > 60000)) syncNow().then(r => { if (r.ok && document.querySelector('.trail')) pathHome(); });
+});
 
 /* ====== Démarrage ====== */
 (async function init() {
@@ -1236,6 +1310,7 @@ function profile() {
   DB.sp.forEach(s => { const f = DB.fams.find(x => x.n === s.f) || {}; s.grp = f.grp; s.cat = f.cat; s.xc = s.xc || []; s.d = s.d || ''; s.v = s.v || ''; s.vt = s.vt || ''; s.sci = s.sci || ''; });
   sosInit(); buildUnits();
   try { AUDIO = await (await fetch('audio.json')).json(); } catch (e) { AUDIO = {}; }
+  if (SYNC.k) await Promise.race([syncNow(), new Promise(r => setTimeout(r, 4000))]);
   home();
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => { });
   // préchargement discret des photos
