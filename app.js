@@ -1288,9 +1288,18 @@ function profile() {
   <div class="lstats"><div><small>Série</small><b>${S.streak || 0} j</b></div><div><small>Leçons</small><b>${nd}</b></div><div><small>Dorées</small><b>${ng}</b></div><div><small>Réussite</small><b>${S.answered ? Math.round(S.correct / S.answered * 100) : 0} %</b></div></div>
   <h2>Badges</h2><div class="badges">${BADGES.map(([id, ic, n, d]) => `<div class="badge ${S.badges.includes(id) ? 'on' : ''}"><span>${ic}</span><b>${n}</b><small>${d}</small></div>`).join('')}</div>
   <h2>Mes appareils</h2>${syncBlock()}
+  <h2>Affichage</h2><div class="block"><h4>Thème</h4><div class="row2" role="group" aria-label="Thème">${[['auto', 'Comme le téléphone'], ['light', 'Clair'], ['dark', 'Sombre']].map(([k, l]) => `<button class="chip" data-theme-set="${k}" aria-pressed="${themeGet() === k}">${l}</button>`).join('')}</div></div>
   <h2>Réglages</h2><button class="btn wide" id="set">Objectif, photos, sauvegarde</button>
   <p class="foot muted small">${DB.sp.length} espèces et ${DB.fams.length} familles issues de ta base Notion (synchro du ${esc(DB.synced)}). Photos et sons : Wikipédia, Wikimedia Commons, xeno-canto.</p>${navBar('profil')}`;
   bindNav(); $('#set').onclick = settings; bindSync(profile); window.scrollTo(0, 0);
+  app().querySelectorAll('[data-theme-set]').forEach(b => b.onclick = () => { themeSet(b.dataset.themeSet); app().querySelectorAll('[data-theme-set]').forEach(x => x.setAttribute('aria-pressed', x === b)); });
+}
+function themeGet() { try { return localStorage.getItem('ornitho-theme') || 'auto'; } catch (e) { return 'auto'; } }
+function themeSet(t) {
+  try { t === 'auto' ? localStorage.removeItem('ornitho-theme') : localStorage.setItem('ornitho-theme', t); } catch (e) { }
+  if (t === 'auto') document.documentElement.removeAttribute('data-theme'); else document.documentElement.dataset.theme = t;
+  const dark = t === 'dark' || (t === 'auto' && matchMedia('(prefers-color-scheme: dark)').matches);
+  document.querySelectorAll('meta[name="theme-color"]').forEach(m => m.setAttribute('content', dark ? '#1B232C' : '#FFFFFF'));
 }
 
 /* ====== Synchronisation entre appareils ====== */
