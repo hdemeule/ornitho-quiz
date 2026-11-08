@@ -246,7 +246,7 @@ const MODES = {
   sci: { title: 'Latin', icon: '🔬', desc: 'Noms scientifiques', types: ['sci'], n: 10 },
   blitz: { title: 'Contre-la-montre', icon: '⚡', desc: '60 secondes, combos multiplicateurs', special: 'blitz' },
   pairs: { title: 'Paires', icon: '🧩', desc: 'Associer espèce et famille ou latin', special: 'pairs' },
-  path: { title: 'Le chemin', icon: '🪜', desc: 'Une photo, quatre étages de classification', special: 'path' }
+  path: { title: 'Du groupe à l\'espèce', icon: '🪜', desc: 'Une photo, quatre étages de classification', special: 'path' }
 };
 
 const ICONS = (() => {
@@ -302,7 +302,8 @@ function checkBadges(ctx) {
 }
 
 /* ====== Écran d'accueil ====== */
-function home() {
+function home() { pathHome(); }
+function training() {
   const r = rank();
   const pct = r.to ? Math.round((S.xp - r.from) / (r.to - r.from) * 100) : 100;
   const t = today(); const done = S.todayDate === t ? S.todayCount : 0;
@@ -310,13 +311,7 @@ function home() {
   const dueN = Object.values(S.cards).filter(c => c.due <= t).length;
   const groups = chapters();
   app().innerHTML = `
-  <div class="topbar"><div class="wordmark"><img src="icon-192.png" alt="">Ornitho<em>Quiz</em></div><div class="streak" title="Jours d'affilée">${S.streak || 0} J</div></div>
-  <header class="hero">
-    <div class="rsub">Niveau ${r.lvl} · ${S.xp.toLocaleString('fr-BE')} XP</div>
-    <div class="rank"><span class="rname">${esc(r.name)}</span></div>
-    <div class="bar"><i style="width:${pct}%"></i></div>
-    <div class="rnext">${r.to ? `${(r.to - S.xp).toLocaleString('fr-BE')} XP avant « ${esc(r.next)} »` : 'Rang maximum'}</div>
-  </header>
+  <div class="top"><h1>Entraînement</h1></div>
   <section class="goal">
     <div class="ring" style="--p:${goalPct}"><span>${done}/${S.goal}</span></div>
     <div><b>Objectif du jour</b><br><span class="muted">${dueN} révision${dueN > 1 ? 's' : ''} en attente</span></div>
@@ -331,12 +326,9 @@ function home() {
   <p class="muted small">Chaque chapitre a trois niveaux : ★ familles, ★★ espèces sur photo, ★★★ critères fins et chants. 80 % pour décrocher l'étoile.</p>
   ${['Non-Passereau', 'Passereau'].map(cat => `<h3>${cat}x</h3><div class="chapters">${groups.filter(g => g.cat === cat).map(g => `
     <button class="chap" data-chap="${esc(g.grp)}"><span>${esc(g.grp)}</span><span class="stars">${'★'.repeat(S.stars[g.grp] || 0)}<i>${'☆'.repeat(3 - (S.stars[g.grp] || 0))}</i></span><small>${g.n} esp. · maîtrise ${g.m}%</small><span class="mbar"><i style="width:${g.m}%"></i></span></button>`).join('')}</div>`).join('')}
-  <h2>Carnet</h2>
-  <div class="row2">
-    <button class="btn primary" data-go="carnet">Guide des espèces</button>
-    <button class="btn" data-go="badges">🏅 Badges (${S.badges.length}/${BADGES.length})</button>
-  </div>
-  <p class="foot muted small">${DB.sp.length} espèces et ${DB.fams.length} familles issues de ta base Notion « Mooc Ornitho database » (synchro du ${esc(DB.synced)}). Photos : Wikipédia / Wikimedia Commons.<br><button class="link" data-go="settings">Réglages</button></p>`;
+
+  <p class="foot muted small">${DB.sp.length} espèces et ${DB.fams.length} familles issues de ta base Notion « Mooc Ornitho database » (synchro du ${esc(DB.synced)}). Photos : Wikipédia / Wikimedia Commons.</p>${navBar('train')}`;
+  bindNav();
   app().querySelectorAll('[data-mode]').forEach(b => b.onclick = () => startMode(b.dataset.mode));
   app().querySelectorAll('[data-chap]').forEach(b => b.onclick = () => chapterScreen(b.dataset.chap));
   app().querySelectorAll('[data-go]').forEach(b => b.onclick = () => ({ carnet, badges: badgesScreen, settings })[b.dataset.go]());
@@ -362,7 +354,7 @@ function chapterScreen(grp) {
     <b>${l.k <= st ? '★' : l.k > st + 1 ? '🔒' : '☆'} ${l.t}</b><small>${l.d}</small></button>`).join('')}</div>
   <h2>Espèces du chapitre</h2>
   <div class="splist">${sp.map(s => spRow(s)).join('')}</div>`;
-  app().querySelector('.back').onclick = home;
+  app().querySelector('.back').onclick = training;
   app().querySelectorAll('.level').forEach(b => b.onclick = () => {
     const l = lv[+b.dataset.l - 1];
     if (l.k > st + 1) { toast('Décroche d\'abord le niveau précédent'); return; }
@@ -410,7 +402,7 @@ async function loadingScreen(msg) {
 async function runQuiz(cfg) {
   if (cfg.photos) { await loadingScreen('Je cherche les photos…'); await waitPhotos(poolFor(cfg.filter)); }
   const qs = (cfg.mix ? buildMixed(cfg.mix, cfg.filter) : buildSession(cfg)).filter(Boolean);
-  if (!qs.length) { toast(cfg.photos ? 'Photos indisponibles : vérifie la connexion' : 'Pas assez de matière pour ce jeu'); return home(); }
+  if (!qs.length) { toast(cfg.photos ? 'Photos indisponibles : vérifie la connexion' : 'Pas assez de matière pour ce jeu'); return training(); }
   let i = 0, score = 0, combo = 0, xpGain = 0; const missed = [];
   const next = () => {
     if (i >= qs.length) return endQuiz(cfg, score, qs.length, xpGain, missed);
@@ -420,7 +412,7 @@ async function runQuiz(cfg) {
       if (ok) { score++; combo++; S.correct++; const g = 10 + Math.min(combo - 1, 5) * 2; xpGain += g; addXP(g); }
       else { combo = 0; missed.push(q.sp); addXP(1); }
       S.todayCount = (S.todayDate === today() ? S.todayCount : 0) + 1; S.todayDate = today(); save();
-    }, () => { i++; next(); }, () => home());
+    }, () => { i++; next(); }, () => training());
   };
   next();
 }
@@ -500,8 +492,8 @@ function endQuiz(cfg, score, total, xp, missed) {
     ${star}
     ${cfg.chapter && pct < 80 ? `<p class="small">Encore ${Math.ceil(total * .8) - score} bonne${Math.ceil(total * .8) - score > 1 ? 's' : ''} réponse${Math.ceil(total * .8) - score > 1 ? 's' : ''} pour l'étoile.</p>` : ''}
     ${uniq.length ? `<h2>À revoir</h2><div class="splist">${uniq.map(spRow).join('')}</div>` : '<p>Aucune erreur.</p>'}
-    <div class="row2"><button class="btn" id="home">Accueil</button><button class="btn primary" id="again">Rejouer</button></div></div>`;
-  $('#home').onclick = home; $('#again').onclick = () => runQuiz(cfg);
+    <div class="row2"><button class="btn" id="home">Entraînement</button><button class="btn primary" id="again">Rejouer</button></div></div>`;
+  $('#home').onclick = training; $('#again').onclick = () => runQuiz(cfg);
   bindRows();
 }
 
@@ -520,7 +512,7 @@ async function blitz() {
       if (ok) { combo++; const pts = Math.min(combo, 5); score += pts; xp += 3 + pts; S.correct++; }
       else { combo = 0; end -= 3000; paused = Date.now(); }
       grade(q.id, ok); S.answered++;
-    }, next, () => { clearInterval(timer); home(); }, bar);
+    }, next, () => { clearInterval(timer); training(); }, bar);
   };
   const tick = () => { if (paused) return; const left = Math.max(0, end - Date.now()); const b = $('#tbar'), s = $('#tsec'); if (b) b.style.width = (left / 600) + '%'; if (s) s.textContent = Math.ceil(left / 1000) + ' s'; if (left <= 0) { clearInterval(timer); finish(); } };
   let finished = false;
@@ -530,8 +522,8 @@ async function blitz() {
     checkBadges({ endSession: true }); save();
     app().innerHTML = `<div class="end"><div class="big">Contre-la-montre</div><h1>${score} points</h1><p class="muted">${total} questions · +${xp} XP</p>${rec ? '<p class="newstar">Nouveau record !</p>' : `<p class="muted">Record : ${best}</p>`}
     <p class="small muted">Combo : chaque bonne réponse vaut 1 à 5 points selon la série. Une erreur coûte 3 secondes.</p>
-    <div class="row2"><button class="btn" id="home">Accueil</button><button class="btn primary" id="again">Rejouer</button></div></div>`;
-    $('#home').onclick = home; $('#again').onclick = blitz;
+    <div class="row2"><button class="btn" id="home">Entraînement</button><button class="btn primary" id="again">Rejouer</button></div></div>`;
+    $('#home').onclick = training; $('#again').onclick = blitz;
   };
   timer = setInterval(tick, 200); next();
 }
@@ -546,7 +538,7 @@ function pairs() {
   let sel = null, found = 0, errors = 0; const t0 = Date.now();
   app().innerHTML = `<div class="qtop"><button class="back">✕</button><b>Paires · ${variant === 'fam' ? 'espèce ↔ famille' : 'espèce ↔ latin'}</b><span class="combo ghost" id="err">0 erreur</span></div>
   <div class="pairs">${cards.map((c, k) => `<button class="pc ${c.kind}" data-k="${k}">${esc(c.t)}</button>`).join('')}</div>`;
-  app().querySelector('.back').onclick = home;
+  app().querySelector('.back').onclick = training;
   app().querySelectorAll('.pc').forEach(b => b.onclick = () => {
     const c = cards[+b.dataset.k]; if (b.classList.contains('found')) return;
     if (!sel) { sel = b; b.classList.add('sel'); return; }
@@ -561,8 +553,8 @@ function pairs() {
       setTimeout(() => {
         app().innerHTML = `<div class="end"><div class="big">Paires</div><h1>${sec} s</h1><p class="muted">${errors} erreur${errors > 1 ? 's' : ''} · +${xp} XP</p>
         <div class="splist">${chosen.map(spRow).join('')}</div>
-        <div class="row2"><button class="btn" id="home">Accueil</button><button class="btn primary" id="again">Rejouer</button></div></div>`;
-        $('#home').onclick = home; $('#again').onclick = pairs; bindRows();
+        <div class="row2"><button class="btn" id="home">Entraînement</button><button class="btn primary" id="again">Rejouer</button></div></div>`;
+        $('#home').onclick = training; $('#again').onclick = pairs; bindRows();
       }, 500);
     }
   });
@@ -572,7 +564,7 @@ function pairs() {
 async function pathGame() {
   await loadingScreen('Je cherche les photos…'); await waitPhotos(SPECIES());
   const withPh = SPECIES().filter(s => photosOf(s).length);
-  if (!withPh.length) { toast('Photos indisponibles hors ligne'); return home(); }
+  if (!withPh.length) { toast('Photos indisponibles hors ligne'); return training(); }
   let round = 0, pts = 0; const ROUNDS = 5;
   const play = () => {
     if (round >= ROUNDS) return fin();
@@ -590,7 +582,7 @@ async function pathGame() {
       <div class="q"><div class="photo-wrap q-ph" id="qph"></div><p class="prompt">${s.p}</p>
       <div class="path small">${steps.slice(0, k).map(x => `<span>${esc(x.a)}</span>`).join('<b>›</b>')}</div>
       <div class="opts">${s.opts.map((o, j) => `<button class="opt" data-j="${j}">${esc(o)}</button>`).join('')}</div><div id="fb"></div></div>`;
-      app().querySelector('.back').onclick = home;
+      app().querySelector('.back').onclick = training;
       showPhoto($('#qph'), ph, sp, true);
       let done = false;
       app().querySelectorAll('.opt').forEach(b => b.onclick = () => {
@@ -611,10 +603,10 @@ async function pathGame() {
   };
   const fin = () => {
     addXP(pts); const best = parseInt(S.best.path || 0); if (pts > best) S.best.path = pts + ' pts'; checkBadges({ endSession: true }); save();
-    app().innerHTML = `<div class="end"><div class="big">Le chemin</div><h1>${pts} points</h1><p class="muted">sur ${ROUNDS * 30} possibles · +${pts} XP</p>
+    app().innerHTML = `<div class="end"><div class="big">Du groupe à l'espèce</div><h1>${pts} points</h1><p class="muted">sur ${ROUNDS * 30} possibles · +${pts} XP</p>
     <p class="small muted">Chaque étage vaut plus que le précédent : 3, 6, 9, 12 points.</p>
-    <div class="row2"><button class="btn" id="home">Accueil</button><button class="btn primary" id="again">Rejouer</button></div></div>`;
-    $('#home').onclick = home; $('#again').onclick = pathGame;
+    <div class="row2"><button class="btn" id="home">Entraînement</button><button class="btn primary" id="again">Rejouer</button></div></div>`;
+    $('#home').onclick = training; $('#again').onclick = pathGame;
   };
   play();
 }
@@ -633,7 +625,7 @@ function settings() {
   <div class="block"><h4>Photos</h4><p class="small">Les photos viennent de l'image principale de l'article Wikipédia (français, puis anglais via le nom scientifique). ${S.badPhotos.length} photo(s) écartée(s).</p><button class="btn" id="rp">Recharger les photos</button></div>
   <div class="block"><h4>Sauvegarde</h4><p class="small">Ta progression vit sur ce téléphone. Copie-la pour la transférer.</p><div class="row2"><button class="btn" id="ex">Copier ma progression</button><button class="btn" id="im">Coller une progression</button></div></div>
   <div class="block"><h4>Remise à zéro</h4><button class="btn danger" id="rz">Effacer toute la progression</button></div>`;
-  app().querySelector('.back').onclick = home;
+  app().querySelector('.back').onclick = profile;
   app().querySelectorAll('[data-g]').forEach(b => b.onclick = () => { S.goal = +b.dataset.g; save(); settings(); });
   $('#rp').onclick = () => { PHOTOS = {}; savePhotos(); toast('Photos rechargées au prochain jeu'); };
   $('#ex').onclick = async () => { try { await navigator.clipboard.writeText(JSON.stringify(S)); toast('Progression copiée'); } catch (e) { prompt('Copie ce texte :', JSON.stringify(S)); } };
@@ -808,7 +800,7 @@ async function sosRun(groups, title, gidForBest) {
     const done = (ok, gain) => { if (ok) { score++; S.correct++; } S.answered++; xp += gain; addXP(gain); S.todayCount = (S.todayDate === today() ? S.todayCount : 0) + 1; S.todayDate = today(); save(); };
     const go = () => { i++; next(); };
     if (it.clue) return sosClue(it.g, it.s, st, done, go);
-    renderQ(it.q, st, ok => { grade(it.q.id, ok); done(ok, ok ? 12 : 1); }, go, () => home());
+    renderQ(it.q, st, ok => { grade(it.q.id, ok); done(ok, ok ? 12 : 1); }, go, () => training());
   };
   next();
 }
@@ -823,7 +815,7 @@ function sosClue(g, s, st, done, go) {
     ${n < max && !answered ? `<button class="btn wide" id="more">Indice suivant · ${pts - 1} pt${pts - 1 > 1 ? 's' : ''} si tu trouves</button>` : ''}
     <p class="small muted">${answered ? '' : `Réponds maintenant : ${pts} point${pts > 1 ? 's' : ''}.`}</p>
     <div class="opts">${opts.map((o, k) => `<button class="opt" data-k="${k}">${esc(o)}</button>`).join('')}</div><div id="fb"></div></div>`;
-    app().querySelector('.back').onclick = home;
+    app().querySelector('.back').onclick = training;
     if ($('#more')) $('#more').onclick = () => { n++; draw(); };
     app().querySelectorAll('.opt').forEach(b => b.onclick = () => {
       if (answered) return; answered = true;
@@ -861,7 +853,7 @@ function sosHome() {
   <button class="btn primary wide" id="all">Tout mélanger</button>
   <h2>Les groupes</h2>
   <div class="chapters">${SOSIES.map((g, i) => `<button class="chap" data-g="${i}"><span>${esc(g.name)}</span><span class="stars">${S.sos[g.id] != null ? S.sos[g.id] + ' %' : ''}</span><small>${esc(g.sub)} · ${g.sp.length} espèces</small></button>`).join('')}</div>`;
-  app().querySelector('.back').onclick = home;
+  app().querySelector('.back').onclick = training;
   $('#all').onclick = () => sosRun(SOSIES, 'Sosies', null);
   app().querySelectorAll('[data-g]').forEach(b => b.onclick = () => sosGroup(SOSIES[+b.dataset.g]));
   window.scrollTo(0, 0);
@@ -897,8 +889,9 @@ function guide() {
   const groups = [...new Set(guideFams().map(f => f.grp).filter(Boolean))];
   app().innerHTML = `<div class="gbar"><button class="back" aria-label="Retour">‹</button><input class="search" id="gq" type="search" placeholder="Recherche…" value="${esc(GUIDE.q)}" autocomplete="off"><button class="gfilter ${GUIDE.grp ? 'on' : ''}" id="gf" aria-label="Filtrer"><i></i><i></i><i></i></button></div>
   <div class="gchips" id="gchips" ${GUIDE.showF ? '' : 'hidden'}><button class="chip ${!GUIDE.grp ? 'on' : ''}" data-grp="">Tous</button>${groups.map(g => `<button class="chip ${GUIDE.grp === g ? 'on' : ''}" data-grp="${esc(g)}">${esc(g)}</button>`).join('')}</div>
-  <div id="glist"></div>`;
+  <div id="glist"></div>${navBar('guide')}`;
   app().querySelector('.back').onclick = home;
+  bindNav();
   $('#gf').onclick = () => { GUIDE.showF = !GUIDE.showF; $('#gchips').hidden = !GUIDE.showF; };
   app().querySelectorAll('[data-grp]').forEach(b => b.onclick = () => { GUIDE.grp = b.dataset.grp; app().querySelectorAll('[data-grp]').forEach(x => x.classList.toggle('on', x === b)); $('#gf').classList.toggle('on', !!GUIDE.grp); draw(); });
   const draw = () => {
@@ -969,11 +962,279 @@ function sosRowsFor(sos) {
   return `<div class="block"><h4>Critères qui tranchent · ${esc(g.name)}</h4>${g.read.map(k => `<p><b>${esc(dimLabel(g, k))}</b> ${esc(sosVal(s.v[k]))}</p>`).join('')}</div>`;
 }
 
+/* ====== Chemin façon Duolingo ====== */
+const UNIT_DEF = [
+  ['Les évidents et les pigeons', ['Evidents', 'Pigeons']],
+  ['Pics et coucous', ['Pics', 'Coucous']],
+  ['Les aériens', ['Aériens']],
+  ['Les colorés', ['Colorés']],
+  ['Mésanges et petits grimpeurs', ['Mésanges', 'Petits grimpeurs']],
+  ['Granivores', ['Granivores']],
+  ['Opportunistes', ['Opportunistes']],
+  ['Insectivores terrestres et percheurs', ['Insectivores terrestres/percheurs']],
+  ['Insectivores acrobatiques', ['Insectivores acrobatiques/farfouilleurs']],
+  ['Nageurs', ['Nageurs']],
+  ['Grands échassiers', ['Grands échassiers']],
+  ['Râles et poules', ['Râles', 'Poules']],
+  ['Limicoles', ['Limicoles']],
+  ['Mouettes et goélands', ['Mouettes']],
+  ['Rapaces diurnes', ['Rapaces diurnes']],
+  ['Rapaces nocturnes', ['Nocturnes']],
+  ['Carnivores', ['Carnivores']]
+];
+const NODE_INFO = {
+  fam: ['Familles', 'Groupes, familles et espèces de référence', 'tree'],
+  photo: ['Reconnaître', 'Identifier sur photo', 'photo'],
+  crit: ['Critères et chants', 'Portraits et écoute', 'chant'],
+  sos: ['Sosies', 'Le critère qui tranche', 'sosies'],
+  trophy: ['Bilan de l\'unité', 'Tout mélangé, avec des révisions', 'trophy']
+};
+let UNITS = [];
+function buildUnits() {
+  const allGrp = new Set(SPECIES().map(s => s.grp));
+  const used = new Set(UNIT_DEF.flatMap(u => u[1]));
+  const defs = UNIT_DEF.map(u => [u[0], u[1].filter(g => allGrp.has(g))]).filter(u => u[1].length);
+  [...allGrp].filter(g => g && !used.has(g)).forEach(g => defs.push([g, [g]]));
+  const sosOf = g => { const c = {}; g.sp.forEach(s => { const d = DB.sp.find(x => x.n === (s.w || s.n)); if (d) c[d.grp] = (c[d.grp] || 0) + 1; }); return Object.entries(c).sort((a, b) => b[1] - a[1])[0]?.[0]; };
+  UNITS = defs.map(([name, grps], i) => {
+    const sos = SOSIES.filter(g => grps.includes(sosOf(g)));
+    const sp = SPECIES().filter(s => grps.includes(s.grp));
+    const fams = [...new Set(sp.map(s => s.f))];
+    const nodes = ['fam', 'photo', 'crit'].concat(sos.length ? ['sos'] : []).concat(['trophy']).map(t => ({ id: `u${i}-${t}`, t }));
+    return { i, name, grps, sos, sp, fams, nodes };
+  });
+}
+const P = () => (S.path = S.path || { done: {} });
+const nodeDone = id => P().done[id] || 0;
+function allNodes() { return UNITS.flatMap(u => u.nodes.map(n => ({ u, n }))); }
+function currentNode() { return allNodes().find(x => !nodeDone(x.n.id)); }
+function migrateStars() {
+  const p = P(); if (p.migrated) return; p.migrated = true;
+  UNITS.forEach(u => { const st = Math.min(...u.grps.map(g => S.stars[g] || 0)); if (st >= 1) p.done[`u${u.i}-fam`] = 1; if (st >= 2) p.done[`u${u.i}-photo`] = 1; if (st >= 3) p.done[`u${u.i}-crit`] = 1; });
+  save();
+}
+
+/* Barre d'onglets */
+function navBar(cur) {
+  const it = [['chemin', 'Chemin', '<path d="M8 28c0-6 16-6 16-12S8 10 8 4" stroke="currentColor" stroke-width="2.5" fill="none"/><circle cx="8" cy="28" r="2.5" fill="currentColor"/><circle cx="8" cy="4" r="2.5" fill="currentColor"/>'],
+    ['train', 'Entraînement', '<rect x="4" y="5" width="10" height="10" stroke="currentColor" stroke-width="2.5" fill="none"/><rect x="18" y="5" width="10" height="10" stroke="currentColor" stroke-width="2.5" fill="none"/><rect x="4" y="19" width="10" height="10" stroke="currentColor" stroke-width="2.5" fill="none"/><rect x="18" y="19" width="10" height="10" fill="currentColor"/>'],
+    ['guide', 'Guide', '<path d="M5 6h9c2 0 2 2 2 3v19c0-2-1-3-3-3H5zM27 6h-9c-2 0-2 2-2 3v19c0-2 1-3 3-3h8z" stroke="currentColor" stroke-width="2.5" fill="none"/>'],
+    ['profil', 'Profil', '<circle cx="16" cy="11" r="6" stroke="currentColor" stroke-width="2.5" fill="none"/><path d="M5 28c1-6 6-9 11-9s10 3 11 9" stroke="currentColor" stroke-width="2.5" fill="none"/>']];
+  return `<nav class="tabbar">${it.map(([k, l, svg]) => `<button class="${k === cur ? 'on' : ''}" data-nav="${k}"><svg viewBox="0 0 32 32">${svg}</svg><span>${l}</span></button>`).join('')}</nav>`;
+}
+function bindNav() { app().querySelectorAll('[data-nav]').forEach(b => b.onclick = () => { stopAudio(); ({ chemin: pathHome, train: training, guide, profil: profile })[b.dataset.nav](); }); }
+
+function pathHome() {
+  if (!UNITS.length) buildUnits();
+  migrateStars();
+  const cur = currentNode();
+  const t = today(); const done = S.todayDate === t ? S.todayCount : 0;
+  let k = 0;
+  const unitHTML = UNITS.map(u => {
+    const unitDone = u.nodes.every(n => nodeDone(n.id));
+    const unitOpen = u.nodes.some(n => nodeDone(n.id)) || (cur && cur.u === u);
+    const locked = !unitDone && !unitOpen;
+    return `<section class="unit ${locked ? 'locked' : ''}" id="unit${u.i}">
+      <div class="ubanner"><div><small>Unité ${u.i + 1}</small><h2>${esc(u.name)}</h2><p>${u.fams.slice(0, 4).map(famLabel).join(', ')}${u.fams.length > 4 ? '…' : ''}</p></div>
+      <button class="uguide" data-unitguide="${u.i}" aria-label="Fiches de l'unité"><svg viewBox="0 0 32 32"><path d="M5 6h9c2 0 2 2 2 3v19c0-2-1-3-3-3H5zM27 6h-9c-2 0-2 2-2 3v19c0-2 1-3 3-3h8z" stroke="currentColor" stroke-width="2.5" fill="none"/></svg></button></div>
+      ${locked ? `<button class="uskip" data-skip="${u.i}">Tu connais déjà ? Passe le test pour sauter ici</button>` : ''}
+      <div class="nodes">${u.nodes.map(n => {
+        const st = nodeDone(n.id); const isCur = cur && cur.n.id === n.id; const off = [0, 1, 1.4, 1, 0, -1, -1.4, -1][k++ % 8];
+        const cls = st === 2 ? 'gold' : st ? 'done' : isCur ? 'cur' : 'lock';
+        return `<div class="nodewrap" style="--x:${off}">${isCur ? '<div class="bubble">Commencer</div>' : ''}<button class="node ${cls} ${n.t === 'trophy' ? 'trophy' : ''}" data-node="${n.id}" aria-label="${esc(NODE_INFO[n.t][0])}">${nodeIcon(n.t, st)}</button></div>`;
+      }).join('')}</div></section>`;
+  }).join('');
+  app().innerHTML = `<header class="pbar"><span class="pstat streak" title="Jours d'affilée"><b>🔥</b>${S.streak || 0}</span><span class="pstat"><b class="xpdot"></b>${S.xp.toLocaleString('fr-BE')} XP</span><span class="pstat"><span class="minring" style="--p:${Math.min(100, Math.round(done / S.goal * 100))}"></span>${done}/${S.goal}</span></header>
+  <div class="trail">${unitHTML}</div>${navBar('chemin')}`;
+  bindNav();
+  app().querySelectorAll('[data-node]').forEach(b => b.onclick = () => nodeSheet(b.dataset.node));
+  app().querySelectorAll('[data-skip]').forEach(b => b.onclick = () => skipSheet(+b.dataset.skip));
+  app().querySelectorAll('[data-unitguide]').forEach(b => b.onclick = () => { const u = UNITS[+b.dataset.unitguide]; GUIDE.q = ''; GUIDE.grp = u.grps.length === 1 ? u.grps[0] : ''; guide(); });
+  const target = cur ? app().querySelector(`[data-node="${cur.n.id}"]`) : null;
+  if (target) setTimeout(() => target.scrollIntoView({ block: 'center' }), 30); else window.scrollTo(0, 0);
+}
+function nodeIcon(t, st) {
+  const ck = '<svg viewBox="0 0 32 32"><path d="M8 17l5 5 11-12" stroke="currentColor" stroke-width="4" fill="none"/></svg>';
+  if (st && t !== 'trophy') return ck;
+  if (t === 'trophy') return '<svg viewBox="0 0 32 32"><path d="M9 5h14v6c0 5-3 8-7 8s-7-3-7-8zM9 8H4c0 4 2 6 5 6M23 8h5c0 4-2 6-5 6M16 19v5M10 28h12M12 24h8" stroke="currentColor" stroke-width="2.5" fill="none"/></svg>';
+  if (t === 'fam') return '<svg viewBox="0 0 32 32"><path d="M16 3l3.6 8 8.4.8-6.4 5.6 2 8.4L16 21.4 8.4 25.8l2-8.4L4 11.8l8.4-.8z" fill="currentColor"/></svg>';
+  return ICONS[NODE_INFO[t][2]] || '';
+}
+function sheet(html) {
+  const el = document.createElement('div'); el.className = 'sheetbg';
+  el.innerHTML = `<div class="sheet">${html}</div>`;
+  el.onclick = e => { if (e.target === el) el.remove(); };
+  document.body.appendChild(el); return el;
+}
+function nodeSheet(id) {
+  const x = allNodes().find(a => a.n.id === id); if (!x) return;
+  const st = nodeDone(id); const cur = currentNode(); const isCur = cur && cur.n.id === id;
+  const [title, desc] = NODE_INFO[x.n.t];
+  if (!st && !isCur) { toast('Termine d\'abord les leçons précédentes'); return; }
+  const el = sheet(`<small>Unité ${x.u.i + 1} · ${esc(x.u.name)}</small><h2>${esc(title)}</h2><p class="muted">${esc(desc)}</p>
+    ${!st ? `<button class="btn primary wide" data-go="1">Commencer · +${x.n.t === 'trophy' ? 40 : 20} XP</button>` : st === 1 ? `<button class="btn primary wide gold" data-go="2">Révision dorée · 3 cœurs</button><button class="btn wide" data-go="1">Rejouer</button>` : `<p class="goldtag">Leçon dorée</p><button class="btn wide" data-go="1">Rejouer</button>`}`);
+  el.querySelectorAll('[data-go]').forEach(b => b.onclick = () => { el.remove(); startLesson(x.u, x.n, +b.dataset.go === 2); });
+}
+function skipSheet(ui) {
+  const u = UNITS[ui];
+  const el = sheet(`<small>Unité ${ui + 1}</small><h2>Sauter jusqu'à « ${esc(u.name)} »</h2><p class="muted">Un test de 12 questions sur toutes les unités précédentes, avec 3 cœurs. Réussi, il valide les leçons d'avant.</p><button class="btn primary wide" id="go">Passer le test</button>`);
+  el.querySelector('#go').onclick = () => { el.remove(); startLesson(u, { id: 'skip' + ui, t: 'skip' }, true); };
+}
+
+/* Composition d'une leçon */
+function sosQs(groups, n) {
+  const out = [];
+  for (let i = 0; i < n; i++) { const g = pick(groups); const r = i % 5; out.push(r === 4 ? sosClueQ(g, pick(g.sp)) : r % 2 ? sosDuel(g) : sosReflex(g)); }
+  return out;
+}
+function sosClueQ(g, s) {
+  return { id: `sos:${g.id}:c:${s.n}`, sosie: true, kind: 'clue', sp: sosPh(s), g, s, prompt: 'Qui est-ce ?', hint: `${g.name} · indice par indice`, opts: shuffle(g.sp.map(x => x.n)), answer: s.n, pairNames: null,
+    clues: g.dims.map(d => ({ label: d[1], val: sosVal(s.v[d[0]]), aud: d[0] === 'voix' && hasAud(s.n) ? s.n : null })),
+    explain(ch, ok) { return ok ? `<p><b>${esc(s.n)}</b> <i>${esc(s.sci)}</i></p>` : sosCompare(g, sosSp(g, ch), s); } };
+}
+function buildLesson(u, n, gold) {
+  const f = s => u.grps.includes(s.grp);
+  const prevGrps = UNITS.slice(0, u.i).flatMap(x => x.grps);
+  const fPrev = s => prevGrps.includes(s.grp);
+  const N = gold ? 12 : 10;
+  let qs = [];
+  if (n.t === 'fam') qs = buildMixed([[['fam', 'grp', 'famdesc', 'ref', 'intrus'], N]], f);
+  if (n.t === 'photo') qs = buildMixed([[['photo'], N - 3], [['crit'], 3]], f);
+  if (n.t === 'crit') qs = buildMixed([[['crit'], Math.ceil(N / 2)], [['chant'], Math.floor(N / 2)]], f);
+  if (n.t === 'sos') qs = sosQs(u.sos, N);
+  if (n.t === 'trophy') { qs = buildMixed([[['photo'], 4], [['crit'], 2], [['chant'], 2], [['fam', 'grp', 'intrus'], 1]], f).concat(u.sos.length ? sosQs(u.sos, 2) : []); if (prevGrps.length) qs = qs.concat(buildMixed([[['photo', 'crit'], 3]], fPrev)); }
+  if (n.t === 'skip') qs = buildMixed([[['photo'], 5], [['crit'], 4], [['fam', 'grp'], 3]], fPrev.length ? fPrev : f);
+  const seen = new Set(qs.map(q => q.id));
+  if (qs.length < 6) {
+    const pad = buildMixed([[['photo', 'crit', 'chant'], 8]], prevGrps.length ? fPrev : null).filter(q => !seen.has(q.id));
+    qs = qs.concat(pad.slice(0, 8 - qs.length));
+  }
+  return shuffle(qs).slice(0, n.t === 'trophy' ? 14 : N);
+}
+async function startLesson(u, n, gold) {
+  await loadingScreen('Je prépare la leçon…');
+  const pool = n.t === 'skip' ? SPECIES() : u.sp.concat(u.sos.flatMap(g => g.sp.map(sosPh)));
+  await waitPhotos(pool);
+  const qs = buildLesson(u, n, gold);
+  if (!qs.length) { toast('Pas assez de matière pour cette leçon'); return pathHome(); }
+  runLesson({ u, n, gold, qs });
+}
+
+/* Moteur de leçon */
+function runLesson(L) {
+  const queue = L.qs.slice(); const total = queue.length;
+  let hearts = L.gold ? 3 : 5, okCount = 0, errors = 0, combo = 0, xp = 0; const t0 = Date.now(); const retried = new Set();
+  const next = () => {
+    if (hearts <= 0) return lessonFail(L);
+    if (!queue.length) return lessonEnd(L, { total, errors, xp, sec: Math.round((Date.now() - t0) / 1000) });
+    const q = queue.shift();
+    lessonQ(q, { prog: okCount / total, hearts, retry: retried.has(q.id), combo }, (ok, chosen) => {
+      grade(q.id, ok); S.answered++;
+      S.todayCount = (S.todayDate === today() ? S.todayCount : 0) + 1; S.todayDate = today();
+      if (ok) { okCount++; combo++; S.correct++; const g = 5 + Math.min(combo, 5); xp += g; addXP(g); if (combo === 5 || combo === 10) toast(`${combo} d'affilée !`); }
+      else { errors++; combo = 0; hearts--; retried.add(q.id); queue.push(Object.assign({}, q, { opts: shuffle(q.opts) })); save(); }
+    }, next);
+  };
+  next();
+}
+function lessonQ(q, st, onAnswer, onNext) {
+  let shown = 1;
+  const heartsHTML = `<span class="hearts ${st.hearts <= 1 ? 'low' : ''}"><svg viewBox="0 0 32 32"><path d="M16 28S3 20 3 11a7 7 0 0 1 13-3 7 7 0 0 1 13 3c0 9-13 17-13 17z" fill="currentColor"/></svg>${st.hearts}</span>`;
+  const draw = () => {
+    app().innerHTML = `<div class="ltop"><button class="back" aria-label="Quitter">✕</button><div class="bar thin"><i style="width:${Math.round(st.prog * 100)}%"></i></div>${heartsHTML}</div>
+    <div class="q lq">
+      ${st.retry ? '<p class="retry">Erreur précédente · deuxième essai</p>' : ''}
+      ${q.kind === 'photo' ? `<div class="photo-wrap q-ph" id="qph"></div>` : ''}
+      ${q.hint ? `<p class="hint">${esc(q.hint)}</p>` : ''}
+      <p class="prompt">${esc(q.prompt)}</p>
+      ${q.quote ? `<blockquote>${esc(q.quote)}</blockquote>` : ''}
+      ${q.clues ? `<div class="clues">${q.clues.slice(0, shown).map(c => `<div class="clue"><small>${esc(c.label)}</small>${esc(c.val)}${c.aud ? `<button class="play" data-aud="${esc(c.aud)}"><i></i>Écouter</button>` : ''}</div>`).join('')}</div>${shown < q.clues.length ? '<button class="btn wide" id="more">Indice suivant</button>' : ''}` : ''}
+      ${q.audio ? `<button class="play big" data-aud="${esc(q.sp.n)}"><i></i>Écouter</button>` : ''}
+      <div class="opts">${q.opts.map((o, k) => `<button class="opt ${q.italic ? 'it' : ''}" data-k="${k}">${esc(o)}</button>`).join('')}</div>
+    </div>`;
+    app().querySelector('.back').onclick = () => quitSheet();
+    if (q.kind === 'photo') showPhoto($('#qph'), q.img, q.sp, true);
+    if ($('#more')) $('#more').onclick = () => { shown++; draw(); };
+    app().querySelectorAll('.opt').forEach(b => b.onclick = () => answer(b));
+  };
+  let done = false;
+  const answer = b => {
+    if (done) return; done = true; stopAudio();
+    const chosen = q.opts[+b.dataset.k]; const ok = chosen === q.answer;
+    app().querySelectorAll('.opt').forEach(x => { if (q.opts[+x.dataset.k] === q.answer) x.classList.add('good'); else if (x === b) x.classList.add('bad'); else x.classList.add('dim'); });
+    if ($('#more')) $('#more').remove();
+    vibrate(ok ? 15 : [30, 40, 30]);
+    onAnswer(ok, chosen);
+    lessonSheet(q, ok, chosen, onNext);
+  };
+  draw(); window.scrollTo(0, 0);
+}
+function lessonSheet(q, ok, chosen, onNext) {
+  const praise = ok ? pick(['Excellent !', 'Bien vu !', 'Parfait !', 'Bravo !', 'Exact !']) : 'Réponse : ' + q.answer;
+  let body = '';
+  if (q.sosie) body = q.explain(chosen, ok);
+  else if (!ok) body = whyWrong(q, chosen);
+  else if (q.id.startsWith('crit') || q.id.startsWith('chant')) body = `<p class="small">${esc(q.sp.n)}${q.sp.sci ? ` <i>${esc(q.sp.sci)}</i>` : ''}</p>`;
+  const spAns = !q.fam && !q.intrusFam && !q.id.startsWith('sci') && q.kind !== 'reflex';
+  let ph = '';
+  if (!ok && spAns && phOf(chosen)) ph = wrongRightSwitch(chosen, q.answer, q.kind === 'photo');
+  else if (!ok && q.sosie && q.pairNames) ph = photoSwitch(q.pairNames.map(n => ({ label: n, ph: phOf(n) })));
+  const listen = spAns ? listenPair(chosen, q.answer, ok) : '';
+  const el = document.createElement('div'); el.className = `lsheet ${ok ? 'ok' : 'ko'}`;
+  el.innerHTML = `<div class="lsin"><div class="lsh"><span class="lsicon">${ok ? '✓' : '✗'}</span>${esc(praise)}</div>
+    <div class="lsbody">${body}${ph}${listen}</div>
+    <button class="btn wide ${ok ? 'okbtn' : 'kobtn'}" id="nx">Continuer</button></div>`;
+  document.body.appendChild(el);
+  requestAnimationFrame(() => el.classList.add('on'));
+  if (q.kind === 'photo' && q.img) fillCredit($('#qph'), q.img, q.sp);
+  el.querySelector('#nx').onclick = () => { stopAudio(); el.remove(); onNext(); };
+}
+function quitSheet() {
+  const el = sheet(`<h2>Quitter la leçon ?</h2><p class="muted">Ta progression dans cette leçon sera perdue. L'XP gagnée reste acquise.</p><button class="btn primary wide" id="stay">Continuer la leçon</button><button class="btn wide" id="quit">Quitter</button>`);
+  el.querySelector('#stay').onclick = () => el.remove();
+  el.querySelector('#quit').onclick = () => { el.remove(); stopAudio(); document.querySelectorAll('.lsheet').forEach(x => x.remove()); pathHome(); };
+}
+function lessonFail(L) {
+  document.querySelectorAll('.lsheet').forEach(x => x.remove());
+  app().innerHTML = `<div class="end"><div class="big">Plus de cœurs</div><h1>Presque</h1><p class="muted">Relis les fiches de l'unité puis réessaie : les erreurs reviennent en priorité.</p>
+  <div class="row2"><button class="btn" id="g">Fiches de l'unité</button><button class="btn primary" id="r">Réessayer</button></div><button class="btn wide" id="h">Retour au chemin</button></div>`;
+  $('#r').onclick = () => startLesson(L.u, L.n, L.gold); $('#h').onclick = pathHome;
+  $('#g').onclick = () => { GUIDE.q = ''; GUIDE.grp = L.u.grps.length === 1 ? L.u.grps[0] : ''; guide(); };
+}
+function lessonEnd(L, r) {
+  const p = P(); const bonus = L.n.t === 'trophy' ? 20 : 10;
+  if (L.n.t === 'skip') { allNodes().filter(x => x.u.i < L.u.i).forEach(x => { if (!p.done[x.n.id]) p.done[x.n.id] = 1; }); }
+  else p.done[L.n.id] = Math.max(p.done[L.n.id] || 0, L.gold ? 2 : 1);
+  addXP(bonus); const perfect = r.errors === 0;
+  checkBadges({ endSession: true, perfect: perfect && r.total >= 8 }); save();
+  const acc = Math.round(r.total / (r.total + r.errors) * 100);
+  const mm = `${Math.floor(r.sec / 60)}:${String(r.sec % 60).padStart(2, '0')}`;
+  app().innerHTML = `<div class="end lend"><div class="big">${L.n.t === 'skip' ? 'Test réussi' : perfect ? 'Leçon parfaite' : L.gold ? 'Leçon dorée' : 'Leçon terminée'}</div>
+    <h1>${esc(L.n.t === 'skip' ? L.u.name : NODE_INFO[L.n.t][0])}</h1>
+    <div class="lstats"><div><small>XP</small><b>+${r.xp + bonus}</b></div><div><small>Précision</small><b>${acc} %</b></div><div><small>Temps</small><b>${mm}</b></div></div>
+    <p class="muted">🔥 Série : ${S.streak} jour${S.streak > 1 ? 's' : ''}</p>
+    <button class="btn primary wide" id="c">Continuer</button></div>`;
+  $('#c').onclick = pathHome;
+}
+
+/* Profil */
+function profile() {
+  const r = rank(); const pct = r.to ? Math.round((S.xp - r.from) / (r.to - r.from) * 100) : 100;
+  const nd = Object.values(P().done).filter(Boolean).length, ng = Object.values(P().done).filter(v => v === 2).length;
+  app().innerHTML = `<div class="top"><h1>Profil</h1></div>
+  <div class="hero"><div class="rsub">Niveau ${r.lvl} · ${S.xp.toLocaleString('fr-BE')} XP</div><div class="rank"><span class="rname">${esc(r.name)}</span></div><div class="bar"><i style="width:${pct}%"></i></div><div class="rnext">${r.to ? `${(r.to - S.xp).toLocaleString('fr-BE')} XP avant « ${esc(r.next)} »` : 'Rang maximum'}</div></div>
+  <div class="lstats"><div><small>Série</small><b>${S.streak || 0} j</b></div><div><small>Leçons</small><b>${nd}</b></div><div><small>Dorées</small><b>${ng}</b></div><div><small>Réussite</small><b>${S.answered ? Math.round(S.correct / S.answered * 100) : 0} %</b></div></div>
+  <h2>Badges</h2><div class="badges">${BADGES.map(([id, ic, n, d]) => `<div class="badge ${S.badges.includes(id) ? 'on' : ''}"><span>${ic}</span><b>${n}</b><small>${d}</small></div>`).join('')}</div>
+  <h2>Réglages</h2><button class="btn wide" id="set">Objectif, photos, sauvegarde</button>
+  <p class="foot muted small">${DB.sp.length} espèces et ${DB.fams.length} familles issues de ta base Notion (synchro du ${esc(DB.synced)}). Photos et sons : Wikipédia, Wikimedia Commons, xeno-canto.</p>${navBar('profil')}`;
+  bindNav(); $('#set').onclick = settings; window.scrollTo(0, 0);
+}
+
 /* ====== Démarrage ====== */
 (async function init() {
   DB = await (await fetch('data.json')).json();
   DB.sp.forEach(s => { const f = DB.fams.find(x => x.n === s.f) || {}; s.grp = f.grp; s.cat = f.cat; s.xc = s.xc || []; s.d = s.d || ''; s.v = s.v || ''; s.vt = s.vt || ''; s.sci = s.sci || ''; });
-  sosInit();
+  sosInit(); buildUnits();
   try { AUDIO = await (await fetch('audio.json')).json(); } catch (e) { AUDIO = {}; }
   home();
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => { });
