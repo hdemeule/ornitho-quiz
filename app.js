@@ -63,7 +63,7 @@ async function wikiBatch(lang, titles) {
 }
 let photoLoading = null;
 async function ensurePhotos(list) {
-  const need = list.filter(s => !(s.n in PHOTOS));
+  const need = list.filter(s => !(s.n in PHOTOS) || !PHOTOS[s.n].length);
   if (!need.length) return;
   if (photoLoading) return photoLoading;
   photoLoading = (async () => {
@@ -628,7 +628,7 @@ function settings() {
   <div class="block"><h4>Remise à zéro</h4><button class="btn danger" id="rz">Effacer toute la progression</button></div>`;
   app().querySelector('.back').onclick = profile;
   app().querySelectorAll('[data-g]').forEach(b => b.onclick = () => { S.goal = +b.dataset.g; save(); settings(); });
-  $('#rp').onclick = () => { PHOTOS = {}; savePhotos(); toast('Photos rechargées au prochain jeu'); };
+  $('#rp').onclick = () => { PHOTOS = {}; savePhotos(); location.reload(); };
   $('#ex').onclick = async () => { try { await navigator.clipboard.writeText(JSON.stringify(S)); toast('Progression copiée'); } catch (e) { prompt('Copie ce texte :', JSON.stringify(S)); } };
   $('#im').onclick = () => { const t = prompt('Colle ici ta progression :'); if (!t) return; try { S = Object.assign(load(), JSON.parse(t)); save(); toast('Progression importée'); home(); } catch (e) { toast('Texte invalide'); } };
   $('#rz').onclick = () => { if (confirm('Effacer définitivement XP, étoiles et révisions ?')) { localStorage.removeItem(KEY); S = load(); home(); } };
@@ -651,7 +651,7 @@ function playAudio(n, btn) {
   PLAYER.play().catch(() => { });
 }
 function audBtn(n, label, cls) { return hasAud(n) ? `<button class="play ${cls || ''}" data-aud="${esc(n)}"><i></i>${esc(label)}</button>` : ''; }
-function audCredit(n) { const k = audKey(n); if (!k) return ''; const a = AUDIO[k]; return `<a class="audcredit" href="${esc(a.page)}" target="_blank" rel="noopener">Son : ${esc(a.by)}</a>`; }
+function audCredit(n) { const k = audKey(n); if (!k) return ''; const a = AUDIO[k]; return `<a class="audcredit" href="${esc(a.page)}" target="_blank" rel="noopener">Son${a.type ? ' (' + esc(a.type) + ')' : ''} : ${esc(a.by)}</a>`; }
 document.addEventListener('click', e => { const b = e.target.closest('[data-aud]'); if (b) { e.preventDefault(); playAudio(b.dataset.aud, b); } });
 function listenPair(chosen, right, ok) {
   const parts = [];
@@ -927,6 +927,7 @@ const FTAB_ICONS = {
   famille: '<svg viewBox="0 0 32 32"><circle cx="16" cy="16" r="12" stroke="currentColor" stroke-width="2.5" fill="none"/><path d="M16 14v9M16 9v2" stroke="currentColor" stroke-width="3"/></svg>',
   sosies: '<svg viewBox="0 0 32 32"><circle cx="11" cy="16" r="7" stroke="currentColor" stroke-width="2.5" fill="none"/><circle cx="21" cy="16" r="7" stroke="currentColor" stroke-width="2.5" fill="none"/></svg>'
 };
+function autoNote(sp) { if (!sp.auto) return ''; const h = u => { try { return new URL(u).hostname.replace('www.', ''); } catch (e) { return u; } }; return `<p class="autonote">Texte ajouté hors de ta base Notion, vérifié sur ${sp.auto.src.map(u => `<a href="${esc(u)}" target="_blank" rel="noopener">${esc(h(u))}</a>`).join(', ')}${sp.auto.conf && sp.auto.conf !== 'haute' ? ' · fiabilité ' + esc(sp.auto.conf) : ''}. À relire avec Le Guide ornitho.</p>`; }
 async function fiche(sp, back, tab) {
   const f = DB.fams.find(x => x.n === sp.f) || {};
   const sos = SOS_INDEX[sp.n];
@@ -936,9 +937,9 @@ async function fiche(sp, back, tab) {
     oiseau: `${hasAud(sp.n) ? `<div class="fsound">${audBtn(sp.n, sp.vt ? sp.vt.toLowerCase() : 'écouter', 'flat')}</div>` : ''}
       ${path(sp)}
       ${sp.d && !sp.solo ? `<p class="ftext">${esc(sp.d)}</p>` : '<p class="muted">Pas encore de critères dans ta base Notion pour cette espèce.</p>'}
-      ${sos ? sosRowsFor(sos) : ''}`,
+      ${sp.d && !sp.solo ? autoNote(sp) : ''}${sos ? sosRowsFor(sos) : ''}`,
     voix: `${hasAud(sp.n) ? audBtn(sp.n, 'Écouter') + audCredit(sp.n) : ''}
-      ${sp.v ? `<p class="ftext">${sp.vt ? `<b>${esc(sp.vt)}.</b> ` : ''}${esc(sp.v)}</p>` : '<p class="muted">Pas encore de description du chant dans ta base.</p>'}
+      ${sp.v ? `<p class="ftext">${sp.vt ? `<b>${esc(sp.vt)}.</b> ` : ''}${esc(sp.v)}</p>` : '<p class="muted">Pas encore de description du chant dans ta base.</p>'}${sp.v ? autoNote(sp) : ''}
       ${sp.xc[0] ? `<a class="btn small" target="_blank" rel="noopener" href="${esc(sp.xc[0])}">Ouvrir sur xeno-canto</a>` : ''}`,
     famille: f.d ? `<h3>${esc(famLabel(f.n))} · ${esc(f.grp || '')}</h3><p class="ftext">${esc(f.d)}</p>${f.sp ? `<p class="muted">${esc(f.sp)}</p>` : ''}${f.ref ? `<p>Espèce de référence : <b>${esc(f.ref)}</b></p>` : ''}` : '<p class="muted">Pas de description de famille.</p>',
     sosies: sos ? `<p class="ftext">${esc(sos.g.ctx)}</p>${sos.g.pairs.filter(p => p[0] === sp.n || p[1] === sp.n || p[0] === sos.s.n || p[1] === sos.s.n).map(p => `<div class="block"><h4>${esc(p[0])} / ${esc(p[1])} · ${esc(dimLabel(sos.g, p[2]))}</h4><p>${esc(p[3])}</p></div>`).join('')}<button class="btn primary wide" id="tosos">Fiche comparative et jeu</button>` : ''
@@ -1335,6 +1336,7 @@ document.addEventListener('keydown', e => {
   DB.sp.forEach(s => { const f = DB.fams.find(x => x.n === s.f) || {}; s.grp = f.grp; s.cat = f.cat; s.xc = s.xc || []; s.d = s.d || ''; s.v = s.v || ''; s.vt = s.vt || ''; s.sci = s.sci || ''; });
   sosInit(); buildUnits();
   try { AUDIO = await (await fetch('audio.json')).json(); } catch (e) { AUDIO = {}; }
+  try { const V = await (await fetch('photos.json')).json(); Object.entries(V).forEach(([n, l]) => { PHOTOS[n] = l.map(f => ({ src: 'https://commons.wikimedia.org/wiki/Special:FilePath/' + encodeURIComponent(f) + '?width=720', file: f, ok: 1 })); }); } catch (e) { }
   if (SYNC.k) await Promise.race([syncNow(), new Promise(r => setTimeout(r, 4000))]);
   home();
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => { });
