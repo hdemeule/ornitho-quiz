@@ -99,6 +99,8 @@ async function credit(file) {
 }
 
 /* ====== Générateurs de questions ====== */
+let LCTX = null; // contexte de leçon : familles de l'unité
+const cutTxt = (t, n = 150) => { if (t.length <= n) return t; const c = t.slice(0, n); const k = Math.max(c.lastIndexOf('. '), c.lastIndexOf('; ')); return (k > 60 ? c.slice(0, k + 1).replace(/;$/, '…') : c.slice(0, c.lastIndexOf(' ')) + '…').trim(); };
 const words = n => n.toLowerCase().replace(/['’]/g, ' ').split(/[\s-]+/).filter(w => w.length > 3 && !['des', 'europe', 'commun'].includes(w));
 function mask(text, sp) {
   let t = text;
@@ -149,6 +151,7 @@ const QTYPES = {
     ok: sp => true,
     make(sp) {
       const fams = DB.fams;
+      if (LCTX) { const opts = shuffle([sp.f, ...shuffle(LCTX.fams.filter(x => x !== sp.f)).slice(0, 3)]); const ph = photosOf(sp)[0]; return { id: 'fam:' + sp.n, sp, kind: ph ? 'photo' : 'text', img: ph, prompt: `${sp.n} : quelle famille ?`, opts: opts.map(famLabel), answer: famLabel(sp.f) }; }
       const sameG = shuffle(fams.filter(f => f.grp === sp.grp && f.n !== sp.f));
       const sameC = shuffle(fams.filter(f => f.grp !== sp.grp && f.cat === sp.cat));
       const opts = shuffle([sp.f, ...[...sameG, ...sameC].slice(0, 3).map(f => f.n)]);
@@ -195,12 +198,24 @@ const QTYPES = {
       return { id: 'ref:' + f.n, sp, fam: f, kind: 'text', prompt: `Espèce de référence du MOOC pour les ${famLabel(f.n)} ?`, opts, answer: f.ref };
     }
   },
+  portrait: {
+    label: 'Le bon portrait', icon: '🪞',
+    ok: sp => sp.d && sp.d.length > 40 && !sp.solo && SPECIES().filter(s => s.n !== sp.n && s.d && s.d.length > 40 && !s.solo && (s.f === sp.f || s.grp === sp.grp)).length >= 3,
+    make(sp) {
+      const pool = SPECIES().filter(s => s.d && s.d.length > 40 && !s.solo);
+      const others = distract(sp, pool);
+      const all = shuffle([sp, ...others]);
+      const txt = x => cutTxt(mask(mask(x.d, x), sp));
+      const ph = photosOf(sp)[0];
+      return { id: 'portrait:' + sp.n, sp, kind: 'text', long: true, prompt: `${sp.n} : quel est son portrait ?`, opts: all.map(txt), optSp: all.map(x => x.n), answer: txt(sp) };
+    }
+  },
   intrus: {
     label: 'L\'intrus', icon: '🚫',
-    ok: sp => SPECIES().filter(s => s.f === sp.f).length >= 3, famOnly: true,
+    ok: sp => SPECIES().filter(s => s.f === sp.f).length >= 3 && (!LCTX || SPECIES().some(s => s.f !== sp.f && LCTX.fams.includes(s.f))), famOnly: true,
     make(sp) {
       const fam = shuffle(SPECIES().filter(s => s.f === sp.f)).slice(0, 3);
-      const out = shuffle(SPECIES().filter(s => s.f !== sp.f && s.grp === sp.grp)).concat(shuffle(SPECIES().filter(s => s.f !== sp.f && s.cat === sp.cat)))[0];
+      const out = LCTX ? shuffle(SPECIES().filter(s => s.f !== sp.f && LCTX.fams.includes(s.f)))[0] : shuffle(SPECIES().filter(s => s.f !== sp.f && s.grp === sp.grp)).concat(shuffle(SPECIES().filter(s => s.f !== sp.f && s.cat === sp.cat)))[0];
       const opts = shuffle([...fam, out]);
       return { id: 'intrus:' + sp.f, sp: out, kind: 'text', prompt: `Trois sont des ${famLabel(sp.f)}. Lequel est l'intrus ?`, opts: opts.map(o => o.n), answer: out.n, intrusFam: sp.f };
     }
@@ -428,7 +443,7 @@ function renderQ(q, st, onAnswer, onNext, onQuit, timed) {
     ${q.hint ? `<p class="hint">${esc(q.hint)}</p>` : ''}
     ${q.quote ? `<blockquote>${esc(q.quote)}</blockquote>` : ''}
     ${q.audio ? `<button class="play big" data-aud="${esc(q.sp.n)}"><i></i>Écouter le chant</button>` : ''}
-    <div class="opts">${q.opts.map((o, k) => `<button class="opt ${q.italic ? 'it' : ''}" data-k="${k}">${esc(o)}</button>`).join('')}</div>
+    <div class="opts">${q.opts.map((o, k) => `<button class="opt ${q.italic ? 'it' : ''} ${q.long ? 'long' : ''}" data-k="${k}">${esc(o)}</button>`).join('')}</div>
     <div id="fb"></div>
   </div>`;
   app().querySelector('.back').onclick = () => { stopAudio(); onQuit(); };
@@ -461,15 +476,16 @@ function feedback(q, ok, onNext, timed, chosen) {
   else body = `<p><b>${esc(sp.n)}</b>${sp.sci ? ` <i>${esc(sp.sci)}</i>` : ''}</p>${path(sp)}${sp.d && !sp.solo && !q.id.startsWith('crit') ? `<p class="small">${esc(sp.d)}</p>` : ''}${q.id.startsWith('crit') ? `<p class="small">${esc(sp.d)}</p>` : ''}${q.id.startsWith('chant') && sp.xc[0] && !hasAud(sp.n) ? `<a class="btn small" target="_blank" rel="noopener" href="${esc(sp.xc[0])}">▶ Écouter sur xeno-canto</a>` : ''}`;
   let phBlock = '';
   const spAns = !q.fam && !q.intrusFam && !q.id.startsWith('sci');
+  const cN = q.optSp ? q.optSp[q.opts.indexOf(chosen)] : chosen, aN = q.optSp ? q.sp.n : q.answer;
   if (q.sosie && q.pairNames) phBlock = q.kind === 'reflex' || ok ? photoSwitch(q.pairNames.map(n => ({ label: n, ph: phOf(n) }))) : wrongRightSwitch(chosen, q.answer, false);
-  else if (!ok && spAns && phOf(chosen)) phBlock = wrongRightSwitch(chosen, q.answer, q.kind === 'photo');
+  else if (!ok && spAns && phOf(cN)) phBlock = wrongRightSwitch(cN, aN, q.kind === 'photo');
   else if (q.kind !== 'photo' && spAns) phBlock = `<div class="photo-wrap small" id="fbph"></div>`;
   fb.innerHTML = `<div class="fbcard ${ok ? 'ok' : 'ko'}"><div class="fbh">${ok ? '✓' : '✗'} ${praise}</div>
     ${why}
     ${q.sosie ? body : ''}
     ${phBlock}
     ${q.sosie ? '' : body}
-    ${spAns && !q.sosie ? listenPair(chosen, q.answer, ok) : ''}
+    ${spAns && !q.sosie ? listenPair(cN, aN, ok) : ''}
     ${q.sosie && q.pairNames ? `<div class="listen"><small>Écouter</small>${q.pairNames.map(n => audBtn(n, n)).join('')}</div>`.replace('<div class="listen"><small>Écouter</small></div>', '') : ''}
     <button class="btn primary wide" id="nx">Continuer</button></div>`;
   if (q.kind === 'photo' && q.img) { const w = $('#qph'); fillCredit(w, q.img, sp); }
@@ -701,6 +717,10 @@ function whyWrong(q, chosen) {
   const head = `<p class="why">Tu as choisi <b>${esc(chosen)}</b>, mais c'est <b>${esc(q.answer)}</b>.</p>`;
   const r = q.sp;
   if (q.sosie) return '';
+  if (id === 'portrait') {
+    const c = DB.sp.find(s => s.n === (q.optSp || [])[q.opts.indexOf(chosen)]);
+    return `<p class="why">Le portrait choisi est celui de <b>${esc(c ? c.n : '?')}</b>.</p>` + (c ? twoCol(c.n, c.d, r.n, r.d) : '');
+  }
   if (id === 'intrus') {
     return `<p class="why"><b>${esc(chosen)}</b> fait bien partie des ${famLabel(q.intrusFam)}. L'intrus est <b>${esc(r.n)}</b>, qui fait partie des ${famLabel(r.f)} (groupe ${esc(r.grp)}).</p>`;
   }
@@ -1001,7 +1021,7 @@ const UNIT_DEF = [
   ['Carnivores', ['Carnivores']]
 ];
 const NODE_INFO = {
-  fam: ['Familles', 'Groupes, familles et espèces de référence', 'tree'],
+  fam: ['Portraits', 'Le bon portrait, familles et intrus', 'tree'],
   photo: ['Reconnaître', 'Identifier sur photo', 'photo'],
   crit: ['Critères et chants', 'Portraits et écoute', 'chant'],
   sos: ['Sosies', 'Le critère qui tranche', 'sosies'],
@@ -1130,17 +1150,24 @@ function buildLesson(u, n, gold) {
   const fPrev = s => prevGrps.includes(s.grp);
   const N = gold ? 12 : 10;
   let qs = [];
-  if (n.t === 'fam') qs = buildMixed([[['fam', 'grp', 'famdesc', 'ref', 'intrus'], N]], f);
+  const uf = [...new Set(SPECIES().filter(f).map(s => s.f))];
+  LCTX = { fams: uf };
+  if (n.t === 'fam') {
+    if (uf.length >= 3) qs = buildMixed([[['fam', 'famdesc', 'ref', 'intrus'], 4], [['portrait'], 4], [['crit'], N - 8]], f);
+    else { qs = buildMixed([[['portrait'], 5], [['intrus'], 1], [['crit'], N - 6]], f); LCTX = null; if (prevGrps.length) qs = qs.concat(buildMixed([[['fam', 'famdesc', 'ref'], 2]], fPrev)); LCTX = { fams: uf }; }
+  }
   if (n.t === 'photo') qs = buildMixed([[['photo'], N - 3], [['crit'], 3]], f);
   if (n.t === 'crit') qs = buildMixed([[['crit'], Math.ceil(N / 2)], [['chant'], Math.floor(N / 2)]], f);
   if (n.t === 'sos') qs = sosQs(u.sos, N);
-  if (n.t === 'trophy') { qs = buildMixed([[['photo'], 4], [['crit'], 2], [['chant'], 2], [['fam', 'grp', 'intrus'], 1]], f).concat(u.sos.length ? sosQs(u.sos, 2) : []); if (prevGrps.length) qs = qs.concat(buildMixed([[['photo', 'crit'], 3]], fPrev)); }
+  if (n.t === 'trophy') { qs = buildMixed([[['photo'], 4], [['crit'], 2], [['chant'], 2], [['portrait', 'intrus'], 1]], f).concat(u.sos.length ? sosQs(u.sos, 2) : []); if (prevGrps.length) qs = qs.concat(buildMixed([[['photo', 'crit'], 3]], fPrev)); }
+  if (n.t === 'skip') LCTX = null;
   if (n.t === 'skip') qs = buildMixed([[['photo'], 5], [['crit'], 4], [['fam', 'grp'], 3]], fPrev.length ? fPrev : f);
   const seen = new Set(qs.map(q => q.id));
   if (qs.length < 6) {
     const pad = buildMixed([[['photo', 'crit', 'chant'], 8]], prevGrps.length ? fPrev : null).filter(q => !seen.has(q.id));
     qs = qs.concat(pad.slice(0, 8 - qs.length));
   }
+  LCTX = null;
   return shuffle(qs).slice(0, n.t === 'trophy' ? 14 : N);
 }
 async function startLesson(u, n, gold) {
@@ -1182,7 +1209,7 @@ function lessonQ(q, st, onAnswer, onNext) {
       ${q.quote ? `<blockquote>${esc(q.quote)}</blockquote>` : ''}
       ${q.clues ? `<div class="clues">${q.clues.slice(0, shown).map(c => `<div class="clue"><small>${esc(c.label)}</small>${esc(c.val)}${c.aud ? `<button class="play" data-aud="${esc(c.aud)}"><i></i>Écouter</button>` : ''}</div>`).join('')}</div>${shown < q.clues.length ? '<button class="btn wide" id="more">Indice suivant</button>' : ''}` : ''}
       ${q.audio ? `<button class="play big" data-aud="${esc(q.sp.n)}"><i></i>Écouter</button>` : ''}
-      <div class="opts">${q.opts.map((o, k) => `<button class="opt ${q.italic ? 'it' : ''}" data-k="${k}">${esc(o)}</button>`).join('')}</div>
+      <div class="opts">${q.opts.map((o, k) => `<button class="opt ${q.italic ? 'it' : ''} ${q.long ? 'long' : ''}" data-k="${k}">${esc(o)}</button>`).join('')}</div>
     </div>`;
     app().querySelector('.back').onclick = () => quitSheet();
     if (q.kind === 'photo') showPhoto($('#qph'), q.img, q.sp, true);
@@ -1202,16 +1229,17 @@ function lessonQ(q, st, onAnswer, onNext) {
   draw(); window.scrollTo(0, 0);
 }
 function lessonSheet(q, ok, chosen, onNext) {
-  const praise = ok ? pick(['Excellent !', 'Bien vu !', 'Parfait !', 'Bravo !', 'Exact !']) : 'Réponse : ' + q.answer;
+  const praise = ok ? pick(['Excellent !', 'Bien vu !', 'Parfait !', 'Bravo !', 'Exact !']) : 'Réponse : ' + (q.optSp ? q.sp.n : q.answer);
+  const cN = q.optSp ? q.optSp[q.opts.indexOf(chosen)] : chosen, aN = q.optSp ? q.sp.n : q.answer;
   let body = '';
   if (q.sosie) body = q.explain(chosen, ok);
   else if (!ok) body = whyWrong(q, chosen);
   else if (q.id.startsWith('crit') || q.id.startsWith('chant')) body = `<p class="small">${esc(q.sp.n)}${q.sp.sci ? ` <i>${esc(q.sp.sci)}</i>` : ''}</p>`;
   const spAns = !q.fam && !q.intrusFam && !q.id.startsWith('sci') && q.kind !== 'reflex';
   let ph = '';
-  if (!ok && spAns && phOf(chosen)) ph = wrongRightSwitch(chosen, q.answer, q.kind === 'photo');
+  if (!ok && spAns && phOf(cN)) ph = wrongRightSwitch(cN, aN, q.kind === 'photo');
   else if (!ok && q.sosie && q.pairNames) ph = photoSwitch(q.pairNames.map(n => ({ label: n, ph: phOf(n) })));
-  const listen = spAns ? listenPair(chosen, q.answer, ok) : '';
+  const listen = spAns ? listenPair(cN, aN, ok) : '';
   const el = document.createElement('div'); el.className = `lsheet ${ok ? 'ok' : 'ko'}`;
   el.innerHTML = `<div class="lsin"><div class="lsh"><span class="lsicon">${ok ? '✓' : '✗'}</span>${esc(praise)}</div>
     <div class="lsbody">${body}${ph}${listen}</div>
