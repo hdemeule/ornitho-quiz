@@ -264,9 +264,10 @@ const MODES = {
   path: { title: 'Du groupe à l\'espèce', icon: '🪜', desc: 'Une photo, quatre étages de classification', special: 'path' }
 };
 
+const SEARCH_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><circle cx="10" cy="10" r="6.5"/><path d="M15 15l6 6"/></svg>';
 const ICONS = (() => {
   const w = d => `<svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square">${d}</svg>`;
-  const r = 'stroke="#e8401c"';
+  const r = 'style="stroke:var(--ic-accent,var(--red))"';
   return {
     sosies: w(`<circle cx="11" cy="16" r="7"/><circle cx="21" cy="16" r="7" ${r}/>`),
     photo: w(`<rect x="3" y="8" width="26" height="19"/><path d="M11 8l2-4h6l2 4"/><circle cx="16" cy="17" r="5" ${r}/>`),
@@ -333,9 +334,9 @@ function training() {
     <div><b>Objectif du jour</b><br><span class="muted">${dueN} révision${dueN > 1 ? 's' : ''} en attente</span></div>
     <button class="btn primary" data-mode="daily">Jouer</button>
   </section>
-  <button class="homesearch" data-go="carnet"><span>Rechercher un oiseau…</span></button>
+  <button class="homesearch" data-go="carnet">${SEARCH_SVG}<span>Rechercher un oiseau…</span></button>
   <h2>Jeux</h2>
-  <div class="grid">${Object.entries(MODES).filter(([k]) => k !== 'daily').map(([k, m]) => `
+  <div class="tiles">${Object.entries(MODES).filter(([k]) => k !== 'daily').map(([k, m]) => `
     <button class="tile" data-mode="${k}"><span class="ti">${ICONS[k] || ""}</span><b>${m.title}</b><small>${m.desc}</small>${S.best[k] ? `<em>Record ${S.best[k]}</em>` : ''}</button>`).join('')}
   </div>
   <h2>Chapitres du MOOC</h2>
@@ -413,7 +414,7 @@ async function startMode(k) {
 }
 const waitPhotos = list => Promise.race([ensurePhotos(list).catch(() => { }), new Promise(r => setTimeout(r, 9000))]);
 async function loadingScreen(msg) {
-  app().innerHTML = `<div class="center"><div class="spinner"></div><p class="muted">${esc(msg)}</p></div>`;
+  app().innerHTML = `<div class="loadsk" aria-busy="true"><p class="eyebrow">${esc(msg)}</p><div class="skeleton ph"></div><div class="skeleton" style="width:70%"></div><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div></div>`;
 }
 async function runQuiz(cfg) {
   if (cfg.photos) { await loadingScreen('Je cherche les photos…'); await waitPhotos(poolFor(cfg.filter)); }
@@ -1058,7 +1059,7 @@ function navBar(cur) {
     ['train', 'Entraînement', '<rect x="4" y="5" width="10" height="10" stroke="currentColor" stroke-width="2.5" fill="none"/><rect x="18" y="5" width="10" height="10" stroke="currentColor" stroke-width="2.5" fill="none"/><rect x="4" y="19" width="10" height="10" stroke="currentColor" stroke-width="2.5" fill="none"/><rect x="18" y="19" width="10" height="10" fill="currentColor"/>'],
     ['guide', 'Guide', '<path d="M5 6h9c2 0 2 2 2 3v19c0-2-1-3-3-3H5zM27 6h-9c-2 0-2 2-2 3v19c0-2 1-3 3-3h8z" stroke="currentColor" stroke-width="2.5" fill="none"/>'],
     ['profil', 'Profil', '<circle cx="16" cy="11" r="6" stroke="currentColor" stroke-width="2.5" fill="none"/><path d="M5 28c1-6 6-9 11-9s10 3 11 9" stroke="currentColor" stroke-width="2.5" fill="none"/>']];
-  return `<nav class="tabbar">${it.map(([k, l, svg]) => `<button class="${k === cur ? 'on' : ''}" data-nav="${k}"><svg viewBox="0 0 32 32">${svg}</svg><span>${l}</span></button>`).join('')}</nav>`;
+  return `<nav class="tabbar" aria-label="Navigation principale"><span class="tlogo">Ornitho<em style="font-style:normal;color:var(--red)">Quiz</em></span>${it.map(([k, l, svg]) => `<button ${k === cur ? 'aria-current="page"' : ''} data-nav="${k}"><svg viewBox="0 0 32 32" aria-hidden="true">${svg}</svg><span>${l}</span></button>`).join('')}</nav>`;
 }
 function bindNav() { app().querySelectorAll('[data-nav]').forEach(b => b.onclick = () => { stopAudio(); ({ chemin: pathHome, train: training, guide, profil: profile })[b.dataset.nav](); }); }
 
@@ -1076,13 +1077,14 @@ function pathHome() {
       <div class="ubanner"><div><small>Unité ${u.i + 1}</small><h2>${esc(u.name)}</h2><p>${u.fams.slice(0, 4).map(famLabel).join(', ')}${u.fams.length > 4 ? '…' : ''}</p></div>
       <button class="uguide" data-unitguide="${u.i}" aria-label="Fiches de l'unité"><svg viewBox="0 0 32 32"><path d="M5 6h9c2 0 2 2 2 3v19c0-2-1-3-3-3H5zM27 6h-9c-2 0-2 2-2 3v19c0-2 1-3 3-3h8z" stroke="currentColor" stroke-width="2.5" fill="none"/></svg></button></div>
       ${locked ? `<button class="uskip" data-skip="${u.i}">Tu connais déjà ? Passe le test pour sauter ici</button>` : ''}
-      <div class="nodes">${u.nodes.map(n => {
-        const st = nodeDone(n.id); const isCur = cur && cur.n.id === n.id; const off = [0, 1, 1.4, 1, 0, -1, -1.4, -1][k++ % 8];
+      <ol class="stations">${u.nodes.map(n => {
+        const st = nodeDone(n.id); const isCur = cur && cur.n.id === n.id;
         const cls = st === 2 ? 'gold' : st ? 'done' : isCur ? 'cur' : 'lock';
-        return `<div class="nodewrap" style="--x:${off}">${isCur ? '<div class="bubble">Commencer</div>' : ''}<button class="node ${cls} ${n.t === 'trophy' ? 'trophy' : ''}" data-node="${n.id}" aria-label="${esc(NODE_INFO[n.t][0])}">${nodeIcon(n.t, st)}</button></div>`;
-      }).join('')}</div></section>`;
+        const lab = st === 2 ? 'Dorée' : st ? 'Faite' : isCur ? 'Commencer' : 'Verrouillée';
+        return `<li><button class="station ${cls} ${n.t === 'trophy' ? 'trophy' : ''}" data-node="${n.id}"><span class="sq" aria-hidden="true">${nodeIcon(n.t, st)}</span><span class="st-l"><b>${esc(NODE_INFO[n.t][0])}</b><small>${esc(NODE_INFO[n.t][1])}</small></span><span class="st-s">${lab}</span></button></li>`;
+      }).join('')}</ol></section>`;
   }).join('');
-  app().innerHTML = `<header class="pbar"><span class="pstat streak" title="Jours d'affilée"><b>🔥</b>${S.streak || 0}</span><span class="pstat"><b class="xpdot"></b>${S.xp.toLocaleString('fr-BE')} XP</span><span class="pstat"><span class="minring" style="--p:${Math.min(100, Math.round(done / S.goal * 100))}"></span>${done}/${S.goal}</span></header>
+  app().innerHTML = `<header class="pbar"><span class="wordmark">Ornitho<em>Quiz</em></span><span class="pstats"><span class="pstat streak"><b>${S.streak || 0}</b>j</span><span class="pstat"><b>${S.xp.toLocaleString('fr-BE')}</b>XP</span><span class="pstat"><b>${done}/${S.goal}</b></span></span></header>
   <div class="pwrap"><div class="trail">${unitHTML}</div>${pathSide(cur, done)}</div>${navBar('chemin')}`;
   bindNav();
   app().querySelectorAll('[data-node]').forEach(b => b.onclick = () => nodeSheet(b.dataset.node));
@@ -1096,7 +1098,7 @@ function pathSide(cur, done) {
   const r = rank(); const pct = r.to ? Math.round((S.xp - r.from) / (r.to - r.from) * 100) : 100;
   const nd = Object.values(P().done).filter(Boolean).length; const tot = allNodes().length;
   return `<aside class="pside">
-    <div class="pcard prow"><span class="pstat streak"><b>🔥</b>${S.streak || 0} jour${(S.streak || 0) > 1 ? 's' : ''}</span><span class="pstat"><b class="xpdot"></b>${S.xp.toLocaleString('fr-BE')} XP</span></div>
+    <div class="pcard prow"><span class="pstat streak"><b>${S.streak || 0}</b>jour${(S.streak || 0) > 1 ? 's' : ''} d'affilée</span><span class="pstat"><b>${S.xp.toLocaleString('fr-BE')}</b>XP</span></div>
     <div class="pcard"><small>Rang</small><h3>${esc(r.name)}</h3><div class="bar"><i style="width:${pct}%"></i></div><p class="muted small">${r.to ? `${(r.to - S.xp).toLocaleString('fr-BE')} XP avant « ${esc(r.next)} »` : 'Rang maximum'}</p></div>
     <div class="pcard"><small>Objectif du jour</small><div class="prow"><div class="ring" style="--p:${Math.min(100, Math.round(done / S.goal * 100))}"><span>${done}/${S.goal}</span></div><p class="small">${done >= S.goal ? 'Objectif atteint.' : `Encore ${S.goal - done} question${S.goal - done > 1 ? 's' : ''}.`}</p></div></div>
     <div class="pcard"><small>Parcours</small><p class="small"><b>${nd}</b> leçons sur ${tot}${cur ? ` · en cours : ${esc(cur.u.name)}` : ''}</p>
@@ -1282,7 +1284,7 @@ function profile() {
   const r = rank(); const pct = r.to ? Math.round((S.xp - r.from) / (r.to - r.from) * 100) : 100;
   const nd = Object.values(P().done).filter(Boolean).length, ng = Object.values(P().done).filter(v => v === 2).length;
   app().innerHTML = `<div class="top"><h1>Profil</h1></div>
-  <div class="hero"><div class="rsub">Niveau ${r.lvl} · ${S.xp.toLocaleString('fr-BE')} XP</div><div class="rank"><span class="rname">${esc(r.name)}</span></div><div class="bar"><i style="width:${pct}%"></i></div><div class="rnext">${r.to ? `${(r.to - S.xp).toLocaleString('fr-BE')} XP avant « ${esc(r.next)} »` : 'Rang maximum'}</div></div>
+  <div class="phero"><div class="rsub">Niveau ${r.lvl} · ${S.xp.toLocaleString('fr-BE')} XP</div><div class="rank"><span class="rname">${esc(r.name)}</span></div><div class="bar"><i style="width:${pct}%"></i></div><div class="rnext">${r.to ? `${(r.to - S.xp).toLocaleString('fr-BE')} XP avant « ${esc(r.next)} »` : 'Rang maximum'}</div></div>
   <div class="lstats"><div><small>Série</small><b>${S.streak || 0} j</b></div><div><small>Leçons</small><b>${nd}</b></div><div><small>Dorées</small><b>${ng}</b></div><div><small>Réussite</small><b>${S.answered ? Math.round(S.correct / S.answered * 100) : 0} %</b></div></div>
   <h2>Badges</h2><div class="badges">${BADGES.map(([id, ic, n, d]) => `<div class="badge ${S.badges.includes(id) ? 'on' : ''}"><span>${ic}</span><b>${n}</b><small>${d}</small></div>`).join('')}</div>
   <h2>Mes appareils</h2>${syncBlock()}
@@ -1374,6 +1376,30 @@ document.addEventListener('keydown', e => {
   if ((e.key === 'ArrowLeft' || e.key === 'ArrowRight') && FICHE_GO && document.querySelector('#fph')) { e.preventDefault(); FICHE_GO(e.key === 'ArrowRight' ? 1 : -1); return; }
   if ((e.key === 'e' || e.key === 'E')) { const pl = document.querySelector('.play.big, .clue .play'); if (pl) pl.click(); }
 });
+
+
+/* ====== Retour du téléphone, titre d'onglet, hors connexion ====== */
+(function shell() {
+  let pushing = false;
+  const sync = () => {
+    const b = document.querySelector('#app .back');
+    if (b && !(history.state && history.state.sub)) { pushing = true; history.pushState({ sub: 1 }, ''); pushing = false; }
+    const h = document.querySelector('#app h1');
+    const t = document.querySelector('#app .ltop') ? 'Leçon' : document.querySelector('#app .gbar') ? 'Guide' : document.querySelector('#app .trail') ? 'Chemin' : h ? h.textContent.trim() : '';
+    document.title = t && !/^ornitho/i.test(t) ? `${t.charAt(0) + t.slice(1).toLowerCase()} · Ornitho Quiz` : 'Ornitho Quiz';
+  };
+  new MutationObserver(() => { clearTimeout(sync.t); sync.t = setTimeout(sync, 60); }).observe(document.getElementById('app'), { childList: true });
+  addEventListener('popstate', () => {
+    const sb = document.querySelector('.sheetbg'); if (sb) { sb.remove(); history.pushState({ sub: 1 }, ''); return; }
+    const b = document.querySelector('#app .back'); if (b) b.click();
+  });
+  const net = () => {
+    let el = document.getElementById('offline');
+    if (navigator.onLine) { if (el) el.remove(); return; }
+    if (!el) { el = document.createElement('div'); el.id = 'offline'; el.className = 'banner offline'; el.setAttribute('role', 'status'); el.textContent = 'Hors connexion : les leçons déjà chargées restent jouables, certaines photos et les sons peuvent manquer.'; document.body.prepend(el); }
+  };
+  addEventListener('online', net); addEventListener('offline', net); net();
+})();
 
 /* ====== Démarrage ====== */
 (async function init() {
