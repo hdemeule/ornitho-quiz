@@ -101,7 +101,7 @@ async function credit(file) {
 /* ====== Générateurs de questions ====== */
 let LCTX = null; // contexte de leçon : familles de l'unité
 const cutTxt = (t, n = 150) => { if (t.length <= n) return t; const c = t.slice(0, n); const k = Math.max(c.lastIndexOf('. '), c.lastIndexOf('; ')); return (k > 60 ? c.slice(0, k + 1).replace(/;$/, '…') : c.slice(0, c.lastIndexOf(' ')) + '…').trim(); };
-const words = n => n.toLowerCase().replace(/['’]/g, ' ').split(/[\s-]+/).filter(w => w.length > 3 && !['des', 'europe', 'commun'].includes(w));
+const words = n => n.toLowerCase().replace(/['’]/g, ' ').split(/[\s-]+/).filter(w => w.length > 3 && !['des', 'europe', 'commun', 'petit', 'petite', 'grand', 'grande'].includes(w));
 function mask(text, sp) {
   let t = text;
   const ws = words(sp.n).concat(sp.sci ? sp.sci.toLowerCase().split(' ') : []);
@@ -205,7 +205,7 @@ const QTYPES = {
       const pool = SPECIES().filter(s => s.d && s.d.length > 40 && !s.solo);
       const others = distract(sp, pool);
       const all = shuffle([sp, ...others]);
-      const txt = x => cutTxt(mask(mask(x.d, x), sp));
+      const txt = x => cutTxt(mask(x.d, x));
       const ph = photosOf(sp)[0];
       return { id: 'portrait:' + sp.n, sp, kind: 'text', long: true, prompt: `${sp.n} : quel est son portrait ?`, opts: all.map(txt), optSp: all.map(x => x.n), answer: txt(sp) };
     }
