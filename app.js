@@ -374,10 +374,10 @@ function path(sp) {
 }
 async function showPhoto(el, ph, sp, hideCredit) {
   if (!el) return;
-  if (!ph) { el.innerHTML = `<div class="ph-none">Pas de photo disponible${navigator.onLine ? '' : ' (hors ligne)'}</div>`; return; }
-  el.innerHTML = `<img src="${esc(ph.src)}" alt="" loading="eager"><div class="credit">${hideCredit ? '' : '…'}</div>`;
-  const img = el.querySelector('img');
-  img.onerror = () => { el.innerHTML = '<div class="ph-none">Photo indisponible hors ligne</div>'; };
+  if (!ph) { el.innerHTML = `<div class="pframe"><div class="ph-none">Pas de photo disponible${navigator.onLine ? '' : ' (hors ligne)'}</div></div>`; return; }
+  el.innerHTML = `<div class="pframe"><img class="pbg" src="${esc(ph.src)}" alt="" aria-hidden="true"><img class="pfg" src="${esc(ph.src)}" alt="" loading="eager"></div><div class="credit">${hideCredit ? '' : '…'}</div>`;
+  const img = el.querySelector('.pfg');
+  img.onerror = () => { el.innerHTML = '<div class="pframe"><div class="ph-none">Photo indisponible hors ligne</div></div>'; };
   if (!hideCredit) fillCredit(el, ph, sp);
 }
 async function fillCredit(el, ph, sp) {
@@ -666,7 +666,7 @@ let PSW = 0;
 function photoSwitch(items, start) {
   const id = 'psw' + (++PSW);
   setTimeout(() => bindSwitch(id, items, start || 0), 0);
-  return `<div class="pswitch" id="${id}"><div class="photo-wrap small" data-ph><div class="ph-loading">Chargement…</div></div>
+  return `<div class="pswitch" id="${id}"><div class="photo-wrap small" data-ph><div class="pframe"><div class="ph-loading">Chargement…</div></div></div>
   <div class="ptabs">${items.map((it, i) => `<button class="ptab ${it.cls || ''}" data-i="${i}"><small>${esc(it.sub || '')}</small>${esc(it.label)}</button>`).join('')}</div>
   ${items.length > 1 ? '<p class="small muted ptip">Touche un nom pour changer de photo.</p>' : ''}</div>`;
 }
@@ -948,7 +948,7 @@ async function fiche(sp, back, tab) {
   };
   const phs = photosOf(sp);
   app().innerHTML = `<div class="fhead"><button class="back" aria-label="Retour">‹</button><div><h1>${esc(sp.n)}</h1>${sp.sci ? `<p><i>${esc(sp.sci)}</i></p>` : ''}</div></div>
-  <div class="fgrid"><div class="fphoto photo-wrap" id="fph"><div class="ph-loading">Chargement de la photo…</div></div>
+  <div class="fgrid"><div class="fphoto photo-wrap" id="fph"><div class="pframe"><div class="ph-loading">Chargement de la photo…</div></div></div>
   <div class="fcol"><div class="ftabs">${tabs.map(([k, l]) => `<button class="ftab ${k === cur ? 'on' : ''}" data-tab="${k}">${FTAB_ICONS[k]}<span>${l}</span></button>`).join('')}</div>
   <div class="fbody">${panes[cur]}</div></div></div>`;
   const backFn = back || guide;
