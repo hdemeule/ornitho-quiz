@@ -213,8 +213,11 @@ blockquote{margin:14px 0;padding:14px 16px;background:var(--paper);border-left:4
 @media (prefers-color-scheme:dark){.fhead{background:#26323f}}
 .fphoto{margin:0 -16px;background:#fff;min-height:220px}
 .fphoto img{max-height:46vh;background:#fff}
-.pdots{position:absolute;left:0;right:0;bottom:30px;display:flex;justify-content:center;gap:8px}
-.pdots button{width:10px;height:10px;border-radius:50%;background:rgba(255,255,255,.6);border:1px solid rgba(0,0,0,.3)}.pdots button.on{background:var(--red)}
+.pnav{position:absolute;left:0;right:0;top:0;bottom:28px;display:flex;align-items:center;justify-content:space-between;pointer-events:none}
+.parr{pointer-events:auto;width:48px;height:72px;border:0;background:rgba(0,0,0,.28);color:#fff;font-size:38px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.parr.l{border-radius:0 10px 10px 0}.parr.r{border-radius:10px 0 0 10px}.parr:active{background:rgba(0,0,0,.5)}
+.pcount{position:absolute;top:10px;right:10px;background:rgba(0,0,0,.55);color:#fff;font-size:12px;font-weight:600;padding:3px 9px;border-radius:12px}
+#fph{touch-action:pan-y}
 .ftabs{display:flex;margin:0 -16px;background:var(--paper);border-bottom:1px solid var(--line)}
 .ftab{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;padding:10px 4px 9px;color:var(--muted);border-top:3px solid transparent;font:600 10.5px var(--body);letter-spacing:.08em;text-transform:uppercase}
 .ftab svg{width:24px;height:24px}

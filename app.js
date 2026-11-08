@@ -928,7 +928,9 @@ const FTAB_ICONS = {
   sosies: '<svg viewBox="0 0 32 32"><circle cx="11" cy="16" r="7" stroke="currentColor" stroke-width="2.5" fill="none"/><circle cx="21" cy="16" r="7" stroke="currentColor" stroke-width="2.5" fill="none"/></svg>'
 };
 function autoNote(sp) { if (!sp.auto) return ''; const h = u => { try { return new URL(u).hostname.replace('www.', ''); } catch (e) { return u; } }; return `<p class="autonote">Texte ajouté hors de ta base Notion, vérifié sur ${sp.auto.src.map(u => `<a href="${esc(u)}" target="_blank" rel="noopener">${esc(h(u))}</a>`).join(', ')}${sp.auto.conf && sp.auto.conf !== 'haute' ? ' · fiabilité ' + esc(sp.auto.conf) : ''}. À relire avec Le Guide ornitho.</p>`; }
+let FICHE_GO = null;
 async function fiche(sp, back, tab) {
+  FICHE_GO = null;
   const f = DB.fams.find(x => x.n === sp.f) || {};
   const sos = SOS_INDEX[sp.n];
   const tabs = [['oiseau', 'Oiseau'], ['voix', 'Voix'], ['famille', 'Famille']].concat(sos ? [['sosies', 'Sosies']] : []);
@@ -956,7 +958,21 @@ async function fiche(sp, back, tab) {
   if (!tab) window.scrollTo(0, 0);
   await waitPhotos([sp]);
   const list = photosOf(sp); let pi = 0;
-  const showP = () => { showPhoto($('#fph'), list[pi], sp); if (list.length > 1) { const d = document.createElement('div'); d.className = 'pdots'; d.innerHTML = list.map((_, j) => `<button class="${j === pi ? 'on' : ''}" aria-label="Photo ${j + 1}"></button>`).join(''); $('#fph').appendChild(d); d.querySelectorAll('button').forEach((b, j) => b.onclick = () => { pi = j; showP(); }); } };
+  const fph = $('#fph');
+  const showP = () => {
+    showPhoto(fph, list[pi], sp);
+    if (list.length < 2) return;
+    const nav = document.createElement('div'); nav.className = 'pnav';
+    nav.innerHTML = `<button class="parr l" aria-label="Photo précédente">‹</button><span class="pcount">${pi + 1} / ${list.length}</span><button class="parr r" aria-label="Photo suivante">›</button>`;
+    fph.appendChild(nav);
+    nav.querySelector('.l').onclick = e => { e.stopPropagation(); go(-1); };
+    nav.querySelector('.r').onclick = e => { e.stopPropagation(); go(1); };
+  };
+  const go = d => { if (list.length < 2) return; pi = (pi + d + list.length) % list.length; showP(); };
+  let x0 = null, y0 = 0;
+  fph.addEventListener('touchstart', e => { x0 = e.touches[0].clientX; y0 = e.touches[0].clientY; }, { passive: true });
+  fph.addEventListener('touchend', e => { if (x0 === null) return; const dx = e.changedTouches[0].clientX - x0, dy = e.changedTouches[0].clientY - y0; x0 = null; if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy)) go(dx < 0 ? 1 : -1); }, { passive: true });
+  FICHE_GO = go;
   showP();
 }
 function sosRowsFor(sos) {
@@ -1327,6 +1343,7 @@ document.addEventListener('keydown', e => {
   if ((e.key === 'Enter' || e.key === ' ') && nx) { e.preventDefault(); nx.click(); return; }
   if (e.key === 'Escape') { const sb = document.querySelector('.sheetbg'); if (sb) { sb.remove(); return; } const bk = document.querySelector('.ltop .back, .qtop .back'); if (bk) bk.click(); return; }
   if (/^[1-9]$/.test(e.key)) { const opts = [...document.querySelectorAll('.opt')]; if (opts.some(o => o.classList.contains('good'))) return; const o = opts[+e.key - 1]; if (o) { e.preventDefault(); o.click(); } return; }
+  if ((e.key === 'ArrowLeft' || e.key === 'ArrowRight') && FICHE_GO && document.querySelector('#fph')) { e.preventDefault(); FICHE_GO(e.key === 'ArrowRight' ? 1 : -1); return; }
   if ((e.key === 'e' || e.key === 'E')) { const pl = document.querySelector('.play.big, .clue .play'); if (pl) pl.click(); }
 });
 
@@ -1336,7 +1353,7 @@ document.addEventListener('keydown', e => {
   DB.sp.forEach(s => { const f = DB.fams.find(x => x.n === s.f) || {}; s.grp = f.grp; s.cat = f.cat; s.xc = s.xc || []; s.d = s.d || ''; s.v = s.v || ''; s.vt = s.vt || ''; s.sci = s.sci || ''; });
   sosInit(); buildUnits();
   try { AUDIO = await (await fetch('audio.json')).json(); } catch (e) { AUDIO = {}; }
-  try { const V = await (await fetch('photos.json')).json(); Object.entries(V).forEach(([n, l]) => { PHOTOS[n] = l.map(f => ({ src: 'https://commons.wikimedia.org/wiki/Special:FilePath/' + encodeURIComponent(f) + '?width=720', file: f, ok: 1 })); }); } catch (e) { }
+  try { const V = await (await fetch('photos.json')).json(); Object.entries(V).forEach(([n, l]) => { PHOTOS[n] = l.map(f => ({ src: 'https://commons.wikimedia.org/wiki/Special:FilePath/' + encodeURIComponent(f) + '?width=720', file: f, ok: 1, page: 'https://commons.wikimedia.org/wiki/File:' + encodeURIComponent(f.replace(/ /g, '_')) })); }); } catch (e) { }
   if (SYNC.k) await Promise.race([syncNow(), new Promise(r => setTimeout(r, 4000))]);
   home();
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => { });
