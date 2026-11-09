@@ -262,8 +262,7 @@ const MODES = {
   blitz: { title: 'Contre-la-montre', icon: '⚡', desc: '60 secondes, combos multiplicateurs', special: 'blitz' },
   pairs: { title: 'Paires', icon: '🧩', desc: 'Associer espèce et famille ou latin', special: 'pairs' },
   path: { title: 'Du groupe à l\'espèce', icon: '🪜', desc: 'Une photo, quatre étages de classification', special: 'path' },
-  etho: { title: 'Éthologie', icon: '', desc: 'Les notions du pack 5, toutes unités', special: 'etho' },
-  migr: { title: 'Statut migratoire', icon: '', desc: 'Lu sur la carte du Guide ornitho', special: 'migr' }
+  etho: { title: 'Éthologie', icon: '', desc: 'Les notions du pack 5, toutes unités', special: 'etho' }
 };
 
 const SEARCH_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><circle cx="10" cy="10" r="6.5"/><path d="M15 15l6 6"/></svg>';
@@ -1055,7 +1054,7 @@ function ethoQ(e) {
   const multi = e.type === 'multi';
   const opts = e.type === 'vf' ? e.opts.slice() : shuffle(e.opts.slice());
   const good = e.ans.map(k => e.opts[k]);
-  const q = { id: 'etho:' + e.id, etho: e, kind: 'text', fam: e.type !== 'esp', prompt: e.prompt, opts, answer: good[0], multi, good, long: e.opts.some(o => o.length > 42), hint: multi ? 'Coche tout ce que dit le cours' : '' };
+  const q = { id: 'etho:' + e.id, etho: e, kind: 'text', fam: e.type !== 'esp', prompt: e.prompt, opts, answer: good[0], multi, good, long: e.opts.some(o => o.length > 42), hint: multi && !/^coche/i.test(e.prompt) ? 'Coche tout ce que dit le cours' : '' };
   if (e.type === 'esp') { q.sp = DB.sp.find(s => s.n === good[0]); if (!q.sp) q.fam = true; }
   return q;
 }
