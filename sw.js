@@ -1,5 +1,5 @@
-const V='ornitho-v20';
-const SHELL=['./','index.html','sosies.js','app.js','data.json','audio.json','photos.json','manifest.webmanifest','icon-192.png','icon-512.png','apple-touch-icon.png','icon-maskable-512.png'];
+const V='ornitho-v21';
+const SHELL=['./','index.html','sosies.js','app.js','data.json','audio.json','photos.json','etho.json','manifest.webmanifest','icon-192.png','icon-512.png','apple-touch-icon.png','icon-maskable-512.png'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(V).then(c=>c.addAll(SHELL)));self.skipWaiting();});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(k=>Promise.all(k.filter(x=>x!==V&&x!=='ornitho-img').map(x=>caches.delete(x)))));self.clients.claim();});
 self.addEventListener('fetch',e=>{

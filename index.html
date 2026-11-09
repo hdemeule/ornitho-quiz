@@ -607,6 +607,13 @@ blockquote{font:17px/1.55 var(--body);font-style:normal}
 .row2 .chip{flex:1;min-height:var(--tap)}
 .apptop{position:static}.apptop+.top{padding-top:16px}.apptop+.gbar{padding-top:10px}
 .wordmark,.tlogo{text-transform:none!important;letter-spacing:.01em!important}
+.track{display:flex;gap:0;margin-top:16px}.track .chip{flex:1;min-height:var(--tap);font-size:13px}.track .chip+.chip{border-left-width:0}
+.opts.multi .opt[aria-pressed="true"]{border-color:var(--slate);background:var(--soft);box-shadow:inset 4px 0 0 var(--slate)}
+.opts.multi .opt[aria-pressed="true"]::after{content:" ✓";color:var(--slate)}
+.opt.missed{outline:2px dashed var(--on-action);outline-offset:-6px}
+.opt.good.missed::after{content:" ✓ oublié"}
+#valid{margin-top:14px}
+@media (min-width:960px){.track{max-width:420px}}
 </style>
 </head>
 <body>

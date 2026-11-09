@@ -261,7 +261,9 @@ const MODES = {
   sci: { title: 'Latin', icon: '🔬', desc: 'Noms scientifiques', types: ['sci'], n: 10 },
   blitz: { title: 'Contre-la-montre', icon: '⚡', desc: '60 secondes, combos multiplicateurs', special: 'blitz' },
   pairs: { title: 'Paires', icon: '🧩', desc: 'Associer espèce et famille ou latin', special: 'pairs' },
-  path: { title: 'Du groupe à l\'espèce', icon: '🪜', desc: 'Une photo, quatre étages de classification', special: 'path' }
+  path: { title: 'Du groupe à l\'espèce', icon: '🪜', desc: 'Une photo, quatre étages de classification', special: 'path' },
+  etho: { title: 'Éthologie', icon: '', desc: 'Les notions du pack 5, toutes unités', special: 'etho' },
+  migr: { title: 'Statut migratoire', icon: '', desc: 'Lu sur la carte du Guide ornitho', special: 'migr' }
 };
 
 const SEARCH_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><circle cx="10" cy="10" r="6.5"/><path d="M15 15l6 6"/></svg>';
@@ -278,7 +280,9 @@ const ICONS = (() => {
     sci: w(`<path d="M9 26L15 6h2l6 20M11 19h10"/><path d="M5 28h22" ${r}/>`),
     blitz: w(`<circle cx="16" cy="18" r="11"/><path d="M16 11v7l4 3" ${r}/><path d="M13 3h6"/>`),
     pairs: w(`<rect x="3" y="5" width="11" height="15"/><rect x="18" y="12" width="11" height="15" ${r}/>`),
-    path: w(`<path d="M6 28V20h7v-6h7V8h7"/><path d="M27 4v6" ${r}/>`)
+    path: w(`<path d="M6 28V20h7v-6h7V8h7"/><path d="M27 4v6" ${r}/>`),
+    etho: w(`<path d="M4 20c2 6 22 6 24 0"/><path d="M4 20h24"/><ellipse cx="16" cy="13" rx="5" ry="6.5" ${r}/>`),
+    migr: w(`<path d="M4 24c6-10 14-14 24-16"/><path d="M21 5l7 3-4 6" ${r}/>`)
   };
 })();
 /* ====== Récompenses ====== */
@@ -410,6 +414,8 @@ async function startMode(k) {
   if (m.special === 'blitz') return blitz();
   if (m.special === 'pairs') return pairs();
   if (m.special === 'path') return pathGame();
+  if (m.special === 'etho') return startLesson(ethoFreeUnit(), { id: 'efree', t: 'efree', free: true }, false);
+  if (m.special === 'migr') return startLesson(ethoFreeUnit(), { id: 'statut', t: 'statut', free: true }, false);
   runQuiz({ title: m.title, types: m.types, n: m.n, mix: m.mix, photos: m.photos, mode: k });
 }
 const waitPhotos = list => Promise.race([ensurePhotos(list).catch(() => { }), new Promise(r => setTimeout(r, 9000))]);
@@ -1026,8 +1032,51 @@ const NODE_INFO = {
   photo: ['Reconnaître', 'Identifier sur photo', 'photo'],
   crit: ['Critères et chants', 'Portraits et écoute', 'chant'],
   sos: ['Sosies', 'Le critère qui tranche', 'sosies'],
-  trophy: ['Bilan de l\'unité', 'Tout mélangé, avec des révisions', 'trophy']
+  trophy: ['Bilan de l\'unité', 'Tout mélangé, avec des révisions', 'trophy'],
+  el1: ['Les notions', 'Première moitié du cours', 'etho'],
+  el2: ['Approfondir', 'Seconde moitié du cours, détails fins', 'etho'],
+  statut: ['Statut migratoire', 'Lu sur la carte du Guide ornitho', 'migr'],
+  efree: ['Éthologie', 'Toutes les unités du pack 5', 'etho']
 };
+/* ====== Éthologie (pack 5) ====== */
+let ETHO = { units: [], q: [], statuts: [] }, ETHO_UNITS = [];
+const STATUTS = ['Présent toute l\'année', 'Présent toute l\'année / hivernant', 'Migrateur partiel', 'Migrateur courte distance', 'Migrateur transsaharien'];
+function buildEthoUnits() {
+  ETHO_UNITS = ETHO.units.map((u, i) => {
+    const nodes = [{ id: `e${i}-l1`, t: 'el1' }, { id: `e${i}-l2`, t: 'el2' }];
+    if (u.id === 'migration' && ETHO.statuts.length >= 8) nodes.push({ id: `e${i}-statut`, t: 'statut' });
+    nodes.push({ id: `e${i}-trophy`, t: 'trophy' });
+    const sp = u.id === 'migration' ? ETHO.statuts.map(x => DB.sp.find(s => s.n === x.n)).filter(Boolean) : [];
+    return { i, etho: true, id: u.id, name: u.name, sub: u.sub, grps: [], fams: [], sos: [], sp, nodes };
+  });
+}
+function ethoFreeUnit() { return { i: ETHO_UNITS.length, etho: true, id: 'all', name: 'Éthologie', grps: [], fams: [], sos: [], sp: ETHO.statuts.map(x => DB.sp.find(s => s.n === x.n)).filter(Boolean), nodes: [] }; }
+function ethoQ(e) {
+  const multi = e.type === 'multi';
+  const opts = e.type === 'vf' ? e.opts.slice() : shuffle(e.opts.slice());
+  const good = e.ans.map(k => e.opts[k]);
+  const q = { id: 'etho:' + e.id, etho: e, kind: 'text', fam: e.type !== 'esp', prompt: e.prompt, opts, answer: good[0], multi, good, long: e.opts.some(o => o.length > 42), hint: multi ? 'Coche tout ce que dit le cours' : '' };
+  if (e.type === 'esp') { q.sp = DB.sp.find(s => s.n === good[0]); if (!q.sp) q.fam = true; }
+  return q;
+}
+function statutQ(x) {
+  const sp = DB.sp.find(s => s.n === x.n); const ph = sp ? photosOf(sp)[0] : null;
+  return { id: 'statut:' + x.n, etho: { why: x.why || '', src: x.src }, statut: true, fam: true, sp, kind: ph ? 'photo' : 'text', img: ph, hint: `Carte du Guide ornitho · ${x.pays || 'Belgique'}`, prompt: `${x.n} : quel statut ?`, opts: STATUTS.slice(), answer: x.statut, good: [x.statut], long: true };
+}
+function ethoLesson(u, n, gold) {
+  const N = gold ? 12 : 10;
+  const unitQs = id => ETHO.q.filter(e => e.unit === id);
+  if (n.t === 'statut') return shuffle(ETHO.statuts).slice(0, N).map(statutQ);
+  if (n.t === 'efree') return shuffle(ETHO.q).slice(0, N).map(ethoQ);
+  const all = unitQs(u.id); const half = Math.ceil(all.length / 2);
+  let pool;
+  if (n.t === 'el1') pool = shuffle(all.slice(0, half)).slice(0, N);
+  else if (n.t === 'el2') pool = shuffle(all.slice(half)).slice(0, N);
+  else { const prev = ETHO_UNITS.slice(0, u.i).flatMap(x => unitQs(x.id)); pool = shuffle(all).slice(0, prev.length ? 10 : 14).concat(shuffle(prev).slice(0, 4)); }
+  let qs = pool.map(ethoQ);
+  if (n.t === 'trophy' && u.id === 'migration' && ETHO.statuts.length) qs = qs.concat(shuffle(ETHO.statuts).slice(0, 2).map(statutQ));
+  return shuffle(qs);
+}
 let UNITS = [];
 function buildUnits() {
   const allGrp = new Set(SPECIES().map(s => s.grp));
@@ -1045,7 +1094,10 @@ function buildUnits() {
 }
 const P = () => (S.path = S.path || { done: {} });
 const nodeDone = id => P().done[id] || 0;
-function allNodes() { return UNITS.flatMap(u => u.nodes.map(n => ({ u, n }))); }
+const TRACK = () => (S.track === 'etho' && ETHO_UNITS.length ? 'etho' : 'id');
+const trackUnits = () => TRACK() === 'etho' ? ETHO_UNITS : UNITS;
+function allNodes() { return trackUnits().flatMap(u => u.nodes.map(n => ({ u, n }))); }
+function anyNode(id) { return UNITS.concat(ETHO_UNITS).flatMap(u => u.nodes.map(n => ({ u, n }))).find(a => a.n.id === id); }
 function currentNode() { return allNodes().find(x => !nodeDone(x.n.id)); }
 function migrateStars() {
   const p = P(); if (p.migrated) return; p.migrated = true;
@@ -1070,14 +1122,15 @@ function pathHome() {
   const cur = currentNode();
   const t = today(); const done = S.todayDate === t ? S.todayCount : 0;
   let k = 0;
-  const unitHTML = UNITS.map(u => {
+  const etho = TRACK() === 'etho';
+  const unitHTML = trackUnits().map(u => {
     const unitDone = u.nodes.every(n => nodeDone(n.id));
     const unitOpen = u.nodes.some(n => nodeDone(n.id)) || (cur && cur.u === u);
     const locked = !unitDone && !unitOpen;
     return `<section class="unit ${locked ? 'locked' : ''}" id="unit${u.i}">
-      <div class="ubanner"><div><small>Unité ${u.i + 1}</small><h2>${esc(u.name)}</h2><p>${u.fams.slice(0, 4).map(famLabel).join(', ')}${u.fams.length > 4 ? '…' : ''}</p></div>
-      <button class="uguide" data-unitguide="${u.i}" aria-label="Fiches de l'unité"><svg viewBox="0 0 32 32"><path d="M5 6h9c2 0 2 2 2 3v19c0-2-1-3-3-3H5zM27 6h-9c-2 0-2 2-2 3v19c0-2 1-3 3-3h8z" stroke="currentColor" stroke-width="2.5" fill="none"/></svg></button></div>
-      ${locked ? `<button class="uskip" data-skip="${u.i}">Tu connais déjà ? Passe le test pour sauter ici</button>` : ''}
+      <div class="ubanner"><div><small>${etho ? 'Éthologie · unité' : 'Unité'} ${u.i + 1}</small><h2>${esc(u.name)}</h2><p>${etho ? esc(u.sub || '') : u.fams.slice(0, 4).map(famLabel).join(', ') + (u.fams.length > 4 ? '…' : '')}</p></div>
+      ${etho ? '' : `<button class="uguide" data-unitguide="${u.i}" aria-label="Fiches de l'unité"><svg viewBox="0 0 32 32"><path d="M5 6h9c2 0 2 2 2 3v19c0-2-1-3-3-3H5zM27 6h-9c-2 0-2 2-2 3v19c0-2 1-3 3-3h8z" stroke="currentColor" stroke-width="2.5" fill="none"/></svg></button>`}</div>
+      ${locked && !etho ? `<button class="uskip" data-skip="${u.i}">Tu connais déjà ? Passe le test pour sauter ici</button>` : ''}
       <ol class="stations">${u.nodes.map(n => {
         const st = nodeDone(n.id); const isCur = cur && cur.n.id === n.id;
         const cls = st === 2 ? 'gold' : st ? 'done' : isCur ? 'cur' : 'lock';
@@ -1086,7 +1139,8 @@ function pathHome() {
       }).join('')}</ol></section>`;
   }).join('');
   app().innerHTML = `<header class="pbar"><span class="wordmark">Ornitho<em>Quiz</em></span><span class="pstats"><span class="pstat streak"><b>${S.streak || 0}</b>j</span><span class="pstat"><b>${S.xp.toLocaleString('fr-BE')}</b>XP</span><span class="pstat"><b>${done}/${S.goal}</b></span></span></header>
-  <div class="pwrap"><div class="trail">${unitHTML}</div>${pathSide(cur, done)}</div>${navBar('chemin')}`;
+  <div class="pwrap"><div class="trail">${ETHO_UNITS.length ? '' : '<!--'}<div class="track" role="group" aria-label="Parcours"><button class="chip" data-track="id" aria-pressed="${!etho}">Identification</button><button class="chip" data-track="etho" aria-pressed="${etho}">Éthologie</button></div>${ETHO_UNITS.length ? '' : '-->'}${unitHTML}</div>${pathSide(cur, done)}</div>${navBar('chemin')}`;
+  app().querySelectorAll('[data-track]').forEach(b => b.onclick = () => { S.track = b.dataset.track; save(); pathHome(); window.scrollTo(0, 0); });
   bindNav();
   app().querySelectorAll('[data-node]').forEach(b => b.onclick = () => nodeSheet(b.dataset.node));
   app().querySelectorAll('[data-skip]').forEach(b => b.onclick = () => skipSheet(+b.dataset.skip));
@@ -1097,7 +1151,7 @@ function pathHome() {
 }
 function pathSide(cur, done) {
   const r = rank(); const pct = r.to ? Math.round((S.xp - r.from) / (r.to - r.from) * 100) : 100;
-  const nd = Object.values(P().done).filter(Boolean).length; const tot = allNodes().length;
+  const nd = allNodes().filter(x => nodeDone(x.n.id)).length; const tot = allNodes().length;
   return `<aside class="pside">
     <div class="pcard prow"><span class="pstat streak"><b>${S.streak || 0}</b>jour${(S.streak || 0) > 1 ? 's' : ''} d'affilée</span><span class="pstat"><b>${S.xp.toLocaleString('fr-BE')}</b>XP</span></div>
     <div class="pcard"><small>Rang</small><h3>${esc(r.name)}</h3><div class="bar"><i style="width:${pct}%"></i></div><p class="muted small">${r.to ? `${(r.to - S.xp).toLocaleString('fr-BE')} XP avant « ${esc(r.next)} »` : 'Rang maximum'}</p></div>
@@ -1122,7 +1176,7 @@ function sheet(html) {
   document.body.appendChild(el); return el;
 }
 function nodeSheet(id) {
-  const x = allNodes().find(a => a.n.id === id); if (!x) return;
+  const x = anyNode(id); if (!x) return;
   const st = nodeDone(id); const cur = currentNode(); const isCur = cur && cur.n.id === id;
   const [title, desc] = NODE_INFO[x.n.t];
   if (!st && !isCur) { toast('Termine d\'abord les leçons précédentes'); return; }
@@ -1148,6 +1202,7 @@ function sosClueQ(g, s) {
     explain(ch, ok) { return ok ? `<p><b>${esc(s.n)}</b> <i>${esc(s.sci)}</i></p>` : sosCompare(g, sosSp(g, ch), s); } };
 }
 function buildLesson(u, n, gold) {
+  if (u.etho) return ethoLesson(u, n, gold);
   const f = s => u.grps.includes(s.grp);
   const prevGrps = UNITS.slice(0, u.i).flatMap(x => x.grps);
   const fPrev = s => prevGrps.includes(s.grp);
@@ -1175,7 +1230,7 @@ function buildLesson(u, n, gold) {
 }
 async function startLesson(u, n, gold) {
   await loadingScreen('Je prépare la leçon…');
-  const pool = n.t === 'skip' ? SPECIES() : u.sp.concat(u.sos.flatMap(g => g.sp.map(sosPh)));
+  const pool = n.t === 'skip' ? SPECIES() : u.etho ? (n.t === 'statut' || n.t === 'trophy' ? u.sp : []) : u.sp.concat(u.sos.flatMap(g => g.sp.map(sosPh)));
   await waitPhotos(pool);
   const qs = buildLesson(u, n, gold);
   if (!qs.length) { toast('Pas assez de matière pour cette leçon'); return pathHome(); }
@@ -1183,7 +1238,9 @@ async function startLesson(u, n, gold) {
 }
 
 /* Moteur de leçon */
+let LESSON_FREE = false;
 function runLesson(L) {
+  LESSON_FREE = !!L.n.free;
   const queue = L.qs.slice(); const total = queue.length;
   let hearts = L.gold ? 3 : 5, okCount = 0, errors = 0, combo = 0, xp = 0; const t0 = Date.now(); const retried = new Set();
   const next = () => {
@@ -1212,14 +1269,30 @@ function lessonQ(q, st, onAnswer, onNext) {
       ${q.quote ? `<blockquote>${esc(q.quote)}</blockquote>` : ''}
       ${q.clues ? `<div class="clues">${q.clues.slice(0, shown).map(c => `<div class="clue"><small>${esc(c.label)}</small>${esc(c.val)}${c.aud ? `<button class="play" data-aud="${esc(c.aud)}"><i></i>Écouter</button>` : ''}</div>`).join('')}</div>${shown < q.clues.length ? '<button class="btn wide" id="more">Indice suivant</button>' : ''}` : ''}
       ${q.audio ? `<button class="play big" data-aud="${esc(q.sp.n)}"><i></i>Écouter</button>` : ''}
-      <div class="opts">${q.opts.map((o, k) => `<button class="opt ${q.italic ? 'it' : ''} ${q.long ? 'long' : ''}" data-k="${k}">${esc(o)}</button>`).join('')}</div>
+      <div class="opts ${q.multi ? 'multi' : ''}">${q.opts.map((o, k) => `<button class="opt ${q.italic ? 'it' : ''} ${q.long ? 'long' : ''}" data-k="${k}" ${q.multi ? 'aria-pressed="false"' : ''}>${esc(o)}</button>`).join('')}</div>
+      ${q.multi ? '<button class="btn primary wide" id="valid" disabled>Valider</button>' : ''}
     </div>`;
     app().querySelector('.back').onclick = () => quitSheet();
+    if (q.multi) {
+      app().querySelectorAll('.opt').forEach(b => b.onclick = () => { if (done) return; b.setAttribute('aria-pressed', b.getAttribute('aria-pressed') !== 'true'); $('#valid').disabled = !app().querySelector('.opt[aria-pressed="true"]'); });
+      $('#valid').onclick = validate;
+      return;
+    }
     if (q.kind === 'photo') showPhoto($('#qph'), q.img, q.sp, true);
     if ($('#more')) $('#more').onclick = () => { shown++; draw(); };
     app().querySelectorAll('.opt').forEach(b => b.onclick = () => answer(b));
   };
   let done = false;
+  const validate = () => {
+    if (done) return; done = true;
+    const sel = [...app().querySelectorAll('.opt')].filter(x => x.getAttribute('aria-pressed') === 'true').map(x => q.opts[+x.dataset.k]);
+    const ok = sel.length === q.good.length && sel.every(x => q.good.includes(x));
+    app().querySelectorAll('.opt').forEach(x => { const o = q.opts[+x.dataset.k]; const isG = q.good.includes(o), isS = sel.includes(o); x.classList.add(isG ? 'good' : isS ? 'bad' : 'dim'); if (isG && !isS) x.classList.add('missed'); x.removeAttribute('aria-pressed'); });
+    $('#valid').remove();
+    vibrate(ok ? 15 : [30, 40, 30]);
+    onAnswer(ok, sel);
+    lessonSheet(q, ok, sel, onNext);
+  };
   const answer = b => {
     if (done) return; done = true; stopAudio();
     const chosen = q.opts[+b.dataset.k]; const ok = chosen === q.answer;
@@ -1232,10 +1305,11 @@ function lessonQ(q, st, onAnswer, onNext) {
   draw(); window.scrollTo(0, 0);
 }
 function lessonSheet(q, ok, chosen, onNext) {
-  const praise = ok ? pick(['Excellent !', 'Bien vu !', 'Parfait !', 'Bravo !', 'Exact !']) : 'Réponse : ' + (q.optSp ? q.sp.n : q.answer);
+  const praise = ok ? pick(['Excellent !', 'Bien vu !', 'Parfait !', 'Bravo !', 'Exact !']) : q.multi ? 'Pas tout à fait' : 'Réponse : ' + (q.optSp ? q.sp.n : q.answer);
   const cN = q.optSp ? q.optSp[q.opts.indexOf(chosen)] : chosen, aN = q.optSp ? q.sp.n : q.answer;
   let body = '';
-  if (q.sosie) body = q.explain(chosen, ok);
+  if (q.etho) body = ethoExplain(q, ok, chosen);
+  else if (q.sosie) body = q.explain(chosen, ok);
   else if (!ok) body = whyWrong(q, chosen);
   else if (q.id.startsWith('crit') || q.id.startsWith('chant')) body = `<p class="small">${esc(q.sp.n)}${q.sp.sci ? ` <i>${esc(q.sp.sci)}</i>` : ''}</p>`;
   const spAns = !q.fam && !q.intrusFam && !q.id.startsWith('sci') && q.kind !== 'reflex';
@@ -1252,22 +1326,34 @@ function lessonSheet(q, ok, chosen, onNext) {
   if (q.kind === 'photo' && q.img) fillCredit($('#qph'), q.img, q.sp);
   el.querySelector('#nx').onclick = () => { stopAudio(); el.remove(); onNext(); };
 }
+function ethoExplain(q, ok, chosen) {
+  const e = q.etho; let h = '';
+  if (q.multi) {
+    const miss = q.good.filter(x => !chosen.includes(x)), extra = chosen.filter(x => !q.good.includes(x));
+    if (!ok) h += `<div class="duo">${miss.length ? `<div class="r"><small>Oubliés · le cours le dit</small>${miss.map(esc).join('<br>')}</div>` : ''}${extra.length ? `<div class="w"><small>En trop · pas dans le cours</small>${extra.map(esc).join('<br>')}</div>` : ''}</div>`;
+  } else if (!ok && q.statut) h += `<p class="why">Tu as choisi « ${esc(chosen)} ».</p>`;
+  if (e.why) h += `<p class="why">${esc(e.why)}</p>`;
+  if (e.src) h += `<p class="autonote">Source : ${esc(e.src)}</p>`;
+  return h;
+}
 function quitSheet() {
   const el = sheet(`<h2>Quitter la leçon ?</h2><p class="muted">Ta progression dans cette leçon sera perdue. L'XP gagnée reste acquise.</p><button class="btn primary wide" id="stay">Continuer la leçon</button><button class="btn wide" id="quit">Quitter</button>`);
   el.querySelector('#stay').onclick = () => el.remove();
-  el.querySelector('#quit').onclick = () => { el.remove(); stopAudio(); document.querySelectorAll('.lsheet').forEach(x => x.remove()); pathHome(); };
+  el.querySelector('#quit').onclick = () => { el.remove(); stopAudio(); document.querySelectorAll('.lsheet').forEach(x => x.remove()); (LESSON_FREE ? training : pathHome)(); };
 }
 function lessonFail(L) {
   document.querySelectorAll('.lsheet').forEach(x => x.remove());
-  app().innerHTML = `<div class="end"><div class="big">Plus de cœurs</div><h1>Presque</h1><p class="muted">Relis les fiches de l'unité puis réessaie : les erreurs reviennent en priorité.</p>
+  app().innerHTML = `<div class="end"><div class="big">Plus de cœurs</div><h1>Presque</h1><p class="muted">${L.u.etho ? 'Les erreurs reviennent en priorité à la prochaine tentative.' : 'Relis les fiches de l\'unité puis réessaie : les erreurs reviennent en priorité.'}</p>
   <div class="row2"><button class="btn" id="g">Fiches de l'unité</button><button class="btn primary" id="r">Réessayer</button></div><button class="btn wide" id="h">Retour au chemin</button></div>`;
   $('#r').onclick = () => startLesson(L.u, L.n, L.gold); $('#h').onclick = pathHome;
-  $('#g').onclick = () => { GUIDE.q = ''; GUIDE.grp = L.u.grps.length === 1 ? L.u.grps[0] : ''; guide(); };
+  if (L.u.etho) $('#g').remove();
+  $('#g') && ($('#g').onclick = () => { GUIDE.q = ''; GUIDE.grp = L.u.grps.length === 1 ? L.u.grps[0] : ''; guide(); });
+  if (L.n.free) { $('#h').textContent = 'Retour à l\'entraînement'; $('#h').onclick = training; }
 }
 function lessonEnd(L, r) {
   const p = P(); const bonus = L.n.t === 'trophy' ? 20 : 10;
   if (L.n.t === 'skip') { allNodes().filter(x => x.u.i < L.u.i).forEach(x => { if (!p.done[x.n.id]) p.done[x.n.id] = 1; }); }
-  else p.done[L.n.id] = Math.max(p.done[L.n.id] || 0, L.gold ? 2 : 1);
+  else if (!L.n.free) p.done[L.n.id] = Math.max(p.done[L.n.id] || 0, L.gold ? 2 : 1);
   addXP(bonus); const perfect = r.errors === 0;
   checkBadges({ endSession: true, perfect: perfect && r.total >= 8 }); save();
   const acc = Math.round(r.total / (r.total + r.errors) * 100);
@@ -1277,7 +1363,7 @@ function lessonEnd(L, r) {
     <div class="lstats"><div><small>XP</small><b>+${r.xp + bonus}</b></div><div><small>Précision</small><b>${acc} %</b></div><div><small>Temps</small><b>${mm}</b></div></div>
     <p class="muted">🔥 Série : ${S.streak} jour${S.streak > 1 ? 's' : ''}</p>
     <button class="btn primary wide" id="c">Continuer</button></div>`;
-  $('#c').onclick = pathHome;
+  $('#c').onclick = L.n.free ? training : pathHome;
 }
 
 /* Profil */
@@ -1381,6 +1467,7 @@ document.addEventListener('keydown', e => {
   const tag = (e.target.tagName || '').toLowerCase(); if (tag === 'input' || tag === 'textarea') return;
   const nx = document.querySelector('.lsheet #nx') || document.querySelector('#fb #nx');
   if ((e.key === 'Enter' || e.key === ' ') && nx) { e.preventDefault(); nx.click(); return; }
+  const va = document.querySelector('#valid:not([disabled])'); if (e.key === 'Enter' && va) { e.preventDefault(); va.click(); return; }
   if (e.key === 'Escape') { const sb = document.querySelector('.sheetbg'); if (sb) { sb.remove(); return; } const bk = document.querySelector('.ltop .back, .qtop .back'); if (bk) bk.click(); return; }
   if (/^[1-9]$/.test(e.key)) { const opts = [...document.querySelectorAll('.opt')]; if (opts.some(o => o.classList.contains('good'))) return; const o = opts[+e.key - 1]; if (o) { e.preventDefault(); o.click(); } return; }
   if ((e.key === 'ArrowLeft' || e.key === 'ArrowRight') && FICHE_GO && document.querySelector('#fph')) { e.preventDefault(); FICHE_GO(e.key === 'ArrowRight' ? 1 : -1); return; }
@@ -1417,6 +1504,7 @@ document.addEventListener('keydown', e => {
   DB.sp.forEach(s => { const f = DB.fams.find(x => x.n === s.f) || {}; s.grp = f.grp; s.cat = f.cat; s.xc = s.xc || []; s.d = s.d || ''; s.v = s.v || ''; s.vt = s.vt || ''; s.sci = s.sci || ''; });
   sosInit(); buildUnits();
   try { AUDIO = await (await fetch('audio.json')).json(); } catch (e) { AUDIO = {}; }
+  try { ETHO = await (await fetch('etho.json')).json(); buildEthoUnits(); } catch (e) { ETHO = { units: [], q: [], statuts: [] }; }
   try { const V = await (await fetch('photos.json')).json(); Object.entries(V).forEach(([n, l]) => { PHOTOS[n] = l.map(f => ({ src: 'https://commons.wikimedia.org/wiki/Special:FilePath/' + encodeURIComponent(f) + '?width=720', file: f, ok: 1, page: 'https://commons.wikimedia.org/wiki/File:' + encodeURIComponent(f.replace(/ /g, '_')) })); }); } catch (e) { }
   if (SYNC.k) await Promise.race([syncNow(), new Promise(r => setTimeout(r, 4000))]);
   home();
