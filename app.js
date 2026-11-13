@@ -1104,14 +1104,14 @@ function migrateStars() {
   save();
 }
 
-const appTop = () => `<header class="pbar apptop"><span class="wordmark">Ornitho<em>Quiz</em></span></header>`;
+const appTop = () => `<header class="pbar apptop"><span class="wordmark">Birds<em>.</em></span></header>`;
 /* Barre d'onglets */
 function navBar(cur) {
   const it = [['chemin', 'Chemin', '<path d="M8 28c0-6 16-6 16-12S8 10 8 4" stroke="currentColor" stroke-width="2.5" fill="none"/><circle cx="8" cy="28" r="2.5" fill="currentColor"/><circle cx="8" cy="4" r="2.5" fill="currentColor"/>'],
     ['train', 'Entraînement', '<rect x="4" y="5" width="10" height="10" stroke="currentColor" stroke-width="2.5" fill="none"/><rect x="18" y="5" width="10" height="10" stroke="currentColor" stroke-width="2.5" fill="none"/><rect x="4" y="19" width="10" height="10" stroke="currentColor" stroke-width="2.5" fill="none"/><rect x="18" y="19" width="10" height="10" fill="currentColor"/>'],
     ['guide', 'Guide', '<path d="M5 6h9c2 0 2 2 2 3v19c0-2-1-3-3-3H5zM27 6h-9c-2 0-2 2-2 3v19c0-2 1-3 3-3h8z" stroke="currentColor" stroke-width="2.5" fill="none"/>'],
     ['profil', 'Profil', '<circle cx="16" cy="11" r="6" stroke="currentColor" stroke-width="2.5" fill="none"/><path d="M5 28c1-6 6-9 11-9s10 3 11 9" stroke="currentColor" stroke-width="2.5" fill="none"/>']];
-  return `<nav class="tabbar" aria-label="Navigation principale"><span class="tlogo">Ornitho<em style="font-style:normal;color:var(--red)">Quiz</em></span>${it.map(([k, l, svg]) => `<button ${k === cur ? 'aria-current="page"' : ''} data-nav="${k}"><svg viewBox="0 0 32 32" aria-hidden="true">${svg}</svg><span>${l}</span></button>`).join('')}</nav>`;
+  return `<nav class="tabbar" aria-label="Navigation principale"><span class="tlogo">Birds<em style="font-style:normal;color:var(--red)">.</em></span>${it.map(([k, l, svg]) => `<button ${k === cur ? 'aria-current="page"' : ''} data-nav="${k}"><svg viewBox="0 0 32 32" aria-hidden="true">${svg}</svg><span>${l}</span></button>`).join('')}</nav>`;
 }
 function bindNav() { app().querySelectorAll('[data-nav]').forEach(b => b.onclick = () => { stopAudio(); ({ chemin: pathHome, train: training, guide, profil: profile })[b.dataset.nav](); }); }
 
@@ -1137,7 +1137,7 @@ function pathHome() {
         return `<li><button class="station ${cls} ${n.t === 'trophy' ? 'trophy' : ''}" data-node="${n.id}"><span class="sq" aria-hidden="true">${nodeIcon(n.t, st)}</span><span class="st-l"><b>${esc(NODE_INFO[n.t][0])}</b><small>${esc(NODE_INFO[n.t][1])}</small></span><span class="st-s">${lab}</span></button></li>`;
       }).join('')}</ol></section>`;
   }).join('');
-  app().innerHTML = `<header class="pbar"><span class="wordmark">Ornitho<em>Quiz</em></span><span class="pstats"><span class="pstat streak"><b>${S.streak || 0}</b>j</span><span class="pstat"><b>${S.xp.toLocaleString('fr-BE')}</b>XP</span><span class="pstat"><b>${done}/${S.goal}</b></span></span></header>
+  app().innerHTML = `<header class="pbar"><span class="wordmark">Birds<em>.</em></span><span class="pstats"><span class="pstat streak"><b>${S.streak || 0}</b>j</span><span class="pstat"><b>${S.xp.toLocaleString('fr-BE')}</b>XP</span><span class="pstat"><b>${done}/${S.goal}</b></span></span></header>
   <div class="pwrap"><div class="trail">${ETHO_UNITS.length ? '' : '<!--'}<div class="track" role="group" aria-label="Parcours"><button class="chip" data-track="id" aria-pressed="${!etho}">Identification</button><button class="chip" data-track="etho" aria-pressed="${etho}">Éthologie</button></div>${ETHO_UNITS.length ? '' : '-->'}${unitHTML}</div>${pathSide(cur, done)}</div>${navBar('chemin')}`;
   app().querySelectorAll('[data-track]').forEach(b => b.onclick = () => { S.track = b.dataset.track; save(); pathHome(); window.scrollTo(0, 0); });
   bindNav();
@@ -1482,7 +1482,7 @@ document.addEventListener('keydown', e => {
     if (b && !(history.state && history.state.sub)) { pushing = true; history.pushState({ sub: 1 }, ''); pushing = false; }
     const h = document.querySelector('#app h1');
     const t = document.querySelector('#app .ltop') ? 'Leçon' : document.querySelector('#app .gbar') ? 'Guide' : document.querySelector('#app .trail') ? 'Chemin' : h ? h.textContent.trim() : '';
-    document.title = t && !/^ornitho/i.test(t) ? `${t.charAt(0) + t.slice(1).toLowerCase()} · OrnithoQuiz` : 'OrnithoQuiz';
+    document.title = t && !/^ornitho/i.test(t) ? `${t.charAt(0) + t.slice(1).toLowerCase()} · Birds.` : 'Birds.';
   };
   new MutationObserver(() => { clearTimeout(sync.t); sync.t = setTimeout(sync, 60); }).observe(document.getElementById('app'), { childList: true });
   addEventListener('popstate', () => {
