@@ -1,0 +1,66 @@
+/* Socle commun : feuilles de connexion et de réglages, invitation à installer. Charte « Affiche ». */
+.hs-bg{position:fixed;inset:0;z-index:9000;background:var(--scrim,rgba(10,15,20,.5));display:flex;align-items:flex-end;justify-content:center;font:16px/1.5 var(--body,Inter,system-ui,sans-serif);color:var(--ink,#1A1A1A)}
+.hs-bg.full{background:var(--bg,#FAFAF7);align-items:center;padding:24px}
+.hs{background:var(--paper,#fff);width:100%;max-width:480px;max-height:92dvh;overflow:auto;padding:22px 18px calc(22px + env(safe-area-inset-bottom));border-top:4px solid var(--slate,#3D4F63)}
+.hs-logo{display:block;font:400 60px/1 var(--display,"League Gothic",sans-serif);color:var(--slate,#3D4F63);letter-spacing:.01em;margin-bottom:6px}
+.hs-logo em{font-style:normal;color:var(--red,#E8401C)}
+.hs-h{font:400 26px/1 var(--display,"League Gothic",sans-serif);text-transform:uppercase;color:var(--slate,#3D4F63);margin:6px 0 10px}
+.hs-muted{color:var(--muted,#5F6B78);margin:0 0 14px}
+.hs-ok{border-left:4px solid var(--good,#2E7D4F);background:var(--good-bg,#E3F1E8);padding:10px 12px;margin:0 0 12px}
+.hs-err{border-left:4px solid var(--bad,#C8361A);background:var(--bad-bg,#FBEAE4);padding:10px 12px;margin:10px 0}
+.hs form{display:flex;flex-direction:column;gap:8px;margin-top:14px}
+.hs label{font-weight:600;font-size:13px}
+.hs input[type=password]{min-height:44px;padding:10px 12px;border:1.5px solid var(--line-strong,#949186);background:var(--paper,#fff);color:inherit;border-radius:0;font:inherit}
+.hs-btn{display:inline-flex;align-items:center;justify-content:center;width:100%;min-height:44px;margin-top:8px;padding:10px 18px;border:1.5px solid var(--slate,#3D4F63);background:var(--paper,#fff);color:var(--slate,#3D4F63);border-radius:0;font:600 13px/1.2 var(--body,Inter,sans-serif);letter-spacing:.08em;text-transform:uppercase;cursor:pointer}
+.hs-btn.primary{background:var(--action,#C8361A);border-color:var(--action,#C8361A);color:var(--on-action,#fff)}
+.hs-btn[aria-busy=true]{opacity:.7}
+.hs-row{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;min-height:56px;padding:12px 2px;border:0;border-bottom:1px solid var(--line,#E6E4DC);background:none;color:inherit;font:inherit;text-align:left;cursor:pointer}
+.hs-row b{display:block;font:400 19px/1.1 var(--display,"League Gothic",sans-serif);text-transform:uppercase;color:var(--slate,#3D4F63);font-weight:400}
+.hs-row small{display:block;color:var(--muted,#5F6B78);font-size:13px;margin-top:2px}
+.hs-sw{flex:none;width:52px;height:30px;border:1.5px solid var(--slate,#3D4F63);background:var(--paper,#fff);padding:0;position:relative;border-radius:0;cursor:pointer}
+.hs-sw i{position:absolute;top:3px;left:3px;width:20px;height:20px;background:var(--slate,#3D4F63);transition:transform .18s}
+.hs-sw[aria-checked=true]{background:var(--action,#C8361A);border-color:var(--action,#C8361A)}
+.hs-sw[aria-checked=true] i{transform:translateX(22px);background:var(--on-action,#fff)}
+.hs-install{position:fixed;left:8px;right:8px;bottom:calc(76px + env(safe-area-inset-bottom));z-index:8000;display:grid;grid-template-columns:48px 1fr;gap:12px;align-items:center;background:var(--paper,#fff);border:1px solid var(--line,#E6E4DC);border-top:4px solid var(--slate,#3D4F63);padding:14px;font:15px/1.4 var(--body,Inter,sans-serif);color:var(--ink,#1A1A1A)}
+.hs-install b{display:block;font:400 24px/1 var(--display,"League Gothic",sans-serif);color:var(--slate,#3D4F63);font-weight:400}
+.hs-install b em{font-style:normal;color:var(--red,#E8401C)}
+.hs-install span{color:var(--muted,#5F6B78);font-size:14px}
+.hs-install p{grid-column:1/-1;display:flex;gap:8px;margin:0}
+.hs-install .hs-btn{margin:0}
+@media (min-width:960px){.hs-bg{align-items:center}.hs-install{left:auto;right:24px;bottom:24px;width:420px}}
+@media (prefers-reduced-motion:reduce){.hs-sw i{transition:none}}
+
+/* Écran Réglages (pleine page sur téléphone, fenêtre sur PC) */
+.hs-bg.page{background:var(--bg,#FAFAF7);align-items:stretch}
+.hs-bg.page .hs{max-width:none;max-height:none;height:100dvh;border-top:0;padding:calc(10px + env(safe-area-inset-top)) 16px calc(32px + env(safe-area-inset-bottom));background:var(--bg,#FAFAF7)}
+.hs-head{display:flex;align-items:center;justify-content:space-between;min-height:48px;border-bottom:1px solid var(--line,#E6E4DC);margin:0 -16px 8px;padding:0 16px}
+.hs-logo.sm{font-size:30px;margin:0}
+.hs-x{width:44px;height:44px;border:1.5px solid var(--slate,#3D4F63);background:transparent;color:var(--slate,#3D4F63);font:400 26px/1 var(--body,Inter,sans-serif);border-radius:0;cursor:pointer}
+.hs-title{font:400 clamp(34px,6vw,48px)/.95 var(--display,"League Gothic",sans-serif);text-transform:uppercase;letter-spacing:.02em;color:var(--slate,#3D4F63);margin:14px 0 4px}
+.hs .hs-h{margin-top:26px}
+.hs-chips{display:flex;flex-wrap:wrap;gap:8px}
+.hs-chip{min-height:40px;padding:8px 14px;border:1.5px solid var(--line-strong,#949186);background:var(--paper,#fff);color:var(--ink,#1A1A1A);border-radius:0;font:600 14px var(--body,Inter,sans-serif);cursor:pointer}
+.hs-chip[aria-pressed=true]{background:var(--slate,#3D4F63);border-color:var(--slate,#3D4F63);color:var(--on-slate,#fff)}
+.hs .small{font-size:13px;margin-top:18px}
+@media (min-width:960px){
+  .hs-bg.page{align-items:center;background:var(--scrim,rgba(10,15,20,.5))}
+  .hs-bg.page .hs{max-width:640px;height:auto;max-height:88vh;border-top:4px solid var(--slate,#3D4F63);background:var(--paper,#fff);padding:18px 28px 28px}
+  .hs-head{margin:0 -28px 8px;padding:0 28px}
+}
+
+/* Bouton Réglages : engrenage en haut à droite (téléphone), ligne en bas du menu latéral (PC) */
+.hs-gear{flex:none;margin-left:auto;width:44px;height:44px;display:grid;place-items:center;border:1.5px solid var(--slate,#3D4F63);background:transparent;color:var(--slate,#3D4F63);border-radius:0;cursor:pointer}
+header .hs-gear ~ .hs-gear{display:none}
+.hs-side{display:none}
+@media (max-width:959px){.hs-side{display:none!important}}
+.hs-hdr{justify-content:flex-start!important;gap:10px}
+.hs-hdr > :first-child{margin-right:auto}
+.hs-hdr > .hs-gear{margin-left:0}
+.hs-grp{display:flex;align-items:center;gap:8px}
+.hs-grp > .hs-gear{margin-left:0}
+@media (min-width:960px){
+  .hs-has-side .hs-gear{display:none}
+  .hs-side{display:flex;align-items:center;gap:12px;margin-top:auto;padding:10px 12px;min-height:44px;border:0;border-left:3px solid transparent;background:none;color:var(--muted,#5F6B78);font:600 13px/1.2 var(--body,Inter,sans-serif);letter-spacing:.1em;text-transform:uppercase;cursor:pointer;text-align:left}
+  .hs-side svg{width:22px;height:22px}
+  @media (hover:hover){.hs-side:hover{background:var(--soft,#F1EFE8);color:var(--ink,#1A1A1A)}}
+}

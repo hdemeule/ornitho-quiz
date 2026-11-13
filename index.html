@@ -15,7 +15,9 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Birds.">
-<script>try{var t=localStorage.getItem("ornitho-theme");if(t)document.documentElement.dataset.theme=t}catch(e){}</script>
+<script>try{var t=localStorage.getItem("birds.theme");if(t===null){var o=localStorage.getItem("ornitho-theme");if(o){localStorage.setItem("birds.theme",JSON.stringify(o));localStorage.removeItem("ornitho-theme")}}}catch(e){}</script>
+<meta name="app-id" content="birds"><meta name="app-name" content="Birds."><meta name="hs-data" content="off">
+<link rel="stylesheet" href="/runtime.css"><script src="/webauthn.umd.js"></script><script src="/runtime.js"></script>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="icon" href="icon-192.png">

@@ -3,6 +3,11 @@
   "private": true,
   "type": "module",
   "dependencies": {
-    "@vercel/blob": "2.8.2"
+    "@vercel/blob": "2.8.2",
+    "@neondatabase/serverless": "^1.2.0",
+    "@simplewebauthn/server": "^14.1.0"
+  },
+  "engines": {
+    "node": ">=22"
   }
 }
